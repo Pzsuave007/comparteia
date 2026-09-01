@@ -1,4 +1,6 @@
 from fastapi import FastAPI, APIRouter, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -307,3 +309,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# --------------------------------------------------------------------------
+# Serve the built React frontend (single-port self-hosting).
+# Only active when a build exists; the Emergent preview (no build dir) is
+# unaffected because the frontend runs separately there.
+# --------------------------------------------------------------------------
+FRONTEND_BUILD = os.environ.get("FRONTEND_BUILD_DIR", str(ROOT_DIR.parent / "frontend" / "build"))
+if os.path.isdir(FRONTEND_BUILD):
+    app.mount("/static", StaticFiles(directory=os.path.join(FRONTEND_BUILD, "static")), name="static")
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        if full_path.startswith("api"):
+            return JSONResponse({"detail": "Not Found"}, status_code=404)
+        candidate = os.path.join(FRONTEND_BUILD, full_path)
+        if full_path and os.path.isfile(candidate):
+            return FileResponse(candidate)
+        return FileResponse(os.path.join(FRONTEND_BUILD, "index.html"))
