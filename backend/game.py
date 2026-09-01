@@ -15,6 +15,9 @@ QUESTION_SECONDS = 30
 EXPLORE_END = 40     # legacy default (per-room value stored in room["explore_end"])
 SECRET_LEN = 5       # hidden tiles on the secret path before the Temple
 BACK_STEPS = 3       # trap penalty
+STEAL_WINDOW = 5     # seconds before deadline when stealing opens
+STEAL_REWARD = 3     # honor gained on a successful steal
+STEAL_PENALTY = 1    # honor lost on a failed steal
 STOP_TYPES = {"character", "location", "event", "clue"}  # tiles worth stopping at
 
 
@@ -237,6 +240,7 @@ def _start_question(room, content, category, entity_id, purpose):
         "question": {"id": q["id"], "category": q["category"], "translations": q["translations"]},
         "correct_answer": q["correct_answer"], "bible_reference": q["bible_reference"],
         "predictions": {}, "help_requested": False, "votes": {},
+        "steal_attempts": {}, "stolen_by": None, "steal_failed": [],
         "deadline": time.time() + QUESTION_SECONDS,
     })
     room["phase"] = "question"
@@ -285,6 +289,8 @@ def submit_answer(room, content, pid, answer):
     if room["phase"] != "question" or pid != current_player_id(room):
         return
     cur = room["current"]
+    if cur.get("stolen_by"):
+        return  # question already stolen by another player
     correct = (answer == cur["correct_answer"])
     cur["answer_given"] = answer
     cur["was_correct"] = correct
@@ -323,6 +329,42 @@ def submit_answer(room, content, pid, answer):
             result = {"type": "trap", "passed": False, "back": BACK_STEPS, "new_pos": newpos}
     cur["private_result"] = result
     room["phase"] = "feedback"
+
+
+def steal_answer(room, content, pid, answer):
+    """Spectators race to steal a verify question in the final seconds (points only)."""
+    if room["phase"] != "question":
+        return
+    cur = room["current"]
+    if cur.get("phase_purpose") != "verify":
+        return
+    if pid == current_player_id(room) or cur.get("stolen_by") or "answer_given" in cur:
+        return
+    deadline = cur.get("deadline")
+    if deadline and time.time() < deadline - STEAL_WINDOW:
+        return  # steal window not open yet
+    attempts = cur.setdefault("steal_attempts", {})
+    if pid in attempts:
+        return  # one attempt per player
+    p = room["players"].get(pid)
+    if not p:
+        return
+    attempts[pid] = answer
+    if answer == cur["correct_answer"]:
+        cur["stolen_by"] = pid
+        p["honor"] = p.get("honor", 0) + STEAL_REWARD
+        p["streak"] = 0
+        curp = room["players"].get(current_player_id(room))
+        if curp:
+            curp["streak"] = 0
+        cur["was_correct"] = False
+        cur["answer_given"] = "STOLEN"
+        cur["steal_reward"] = STEAL_REWARD
+        cur["private_result"] = {"type": "stolen", "by": pid, "by_name": p["name"]}
+        room["phase"] = "feedback"
+    else:
+        p["honor"] = max(0, p.get("honor", 0) - STEAL_PENALTY)
+        cur.setdefault("steal_failed", []).append(pid)
 
 
 def _resolve_surprise(room, p):
@@ -464,6 +506,9 @@ def public_current(room, content):
             out["time_left"] = max(0, round(cur["deadline"] - time.time()))
         out["help_requested"] = cur.get("help_requested", False)
         out["votes"] = _tally_votes(cur.get("votes", {}))
+        out["steal_eligible"] = cur.get("phase_purpose") == "verify"
+        out["steal_attempted"] = list(cur.get("steal_attempts", {}).keys())
+        out["steal_failed"] = cur.get("steal_failed", [])
     if phase == "feedback":
         out["was_correct"] = cur.get("was_correct")
         out["correct_answer"] = cur.get("correct_answer")
@@ -474,6 +519,9 @@ def public_current(room, content):
         if pr.get("type") == "trap":
             out["trap_passed"] = pr.get("passed")
             out["trap_back"] = pr.get("back")
+        if pr.get("type") == "stolen":
+            out["stolen_by_name"] = pr.get("by_name")
+            out["steal_reward"] = cur.get("steal_reward", STEAL_REWARD)
         out["streak"] = cur.get("streak", 0)
         out["honor_gain"] = cur.get("honor_gain", 0)
         preds = cur.get("predictions", {})

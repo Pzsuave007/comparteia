@@ -66,6 +66,13 @@ secret server-side verification, dramatic winner reveal. Bilingual (ES/EN) PER P
   The TV vault counter ("ALGUIEN X/3") reveals with a randomized 6-13s delay decoupled from the current
   turn (shownProgress in HostScreen), so players can't infer who found a piece or when. Reaching 3/3
   still opens the secret path immediately (endgame race trigger).
+- ✅ Steal mechanic + readability (2026-06): during the last 5s of a VERIFY question a steal window
+  opens — any spectator can race to answer (`steal` action, game.py `steal_answer`); first CORRECT
+  answer wins +3 honor and the current player LOSES the turn (no reward), a wrong steal costs the
+  attempter -1 honor (one attempt each), and stealing gives POINTS ONLY (never the piece). TV shows a
+  "¡ROBO ABIERTO!" banner + a "¡ROBO!" feedback with the thief; phones show a red steal panel
+  (SpectatorQuestion), "te robaron" for the victim. Also darkened the TV question overlay to
+  rgba(9,15,26,0.97) so questions/answers are fully legible over the map. Engine-tested.
 - ✅ Engine validated via deterministic tests (all dice branches, win, security/privacy, clues).
 
 ## Backlog / Remaining

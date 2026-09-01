@@ -223,32 +223,67 @@ function LobbyWait({ session, t }) {
 }
 
 function WaitTurn({ state, t, send, pid, lang }) {
-  if (state.phase === "question") return <SpectatorQuestion state={state} t={t} send={send} lang={lang} />;
+  if (state.phase === "question") return <SpectatorQuestion state={state} t={t} send={send} lang={lang} pid={pid} />;
+  const cur = state.current || {};
+  const iStole = state.phase === "feedback" && cur.result_type === "stolen" && cur.stolen_by_name;
   return (
     <div className="p-8 text-center flex flex-col items-center justify-center min-h-[60vh]">
-      <Compass className="w-14 h-14 text-bronze/60 animate-spin-slow mb-6" style={{ animationDuration: "10s" }} />
-      <p className="text-sand/70 uppercase tracking-widest text-xs mb-2">{t("turnOf")}</p>
-      <h2 className="font-serif text-4xl text-gold">{state.current_player?.name}</h2>
-      <p className="text-sand/60 mt-8 mb-8">{t("waitTurn")}</p>
+      {iStole ? (
+        <div className="animate-scale-in mb-8" data-testid="spectator-stolen">
+          <div className="text-6xl mb-3">🕵️</div>
+          <h2 className="font-serif text-3xl text-terracotta">{cur.stolen_by_name} {t("turnStolen")}</h2>
+          <p className="text-gold text-lg mt-2">+{cur.steal_reward || 3}</p>
+        </div>
+      ) : (
+        <>
+          <Compass className="w-14 h-14 text-bronze/60 animate-spin-slow mb-6" style={{ animationDuration: "10s" }} />
+          <p className="text-sand/70 uppercase tracking-widest text-xs mb-2">{t("turnOf")}</p>
+          <h2 className="font-serif text-4xl text-gold">{state.current_player?.name}</h2>
+          <p className="text-sand/60 mt-8 mb-8">{t("waitTurn")}</p>
+        </>
+      )}
       <p className="text-sand/50 text-xs uppercase tracking-widest mb-3">{t("reactLabel")}</p>
       <EmojiBar send={send} />
     </div>
   );
 }
 
-function SpectatorQuestion({ state, t, send, lang }) {
+function SpectatorQuestion({ state, t, send, lang, pid }) {
   const cur = state.current || {};
   const q = cur.question;
   const tr = q?.translations?.[lang] || q?.translations?.es;
   const [predicted, setPredicted] = useState(null);
   const [voted, setVoted] = useState(null);
+  const [stole, setStole] = useState(false);
   const lastId = useRef(null);
-  useEffect(() => { if (q?.id !== lastId.current) { lastId.current = q?.id; setPredicted(null); setVoted(null); } }, [q?.id]);
+  useEffect(() => { if (q?.id !== lastId.current) { lastId.current = q?.id; setPredicted(null); setVoted(null); setStole(false); } }, [q?.id]);
   const opts = [["A", tr?.answer_a], ["B", tr?.answer_b], ["C", tr?.answer_c], ["D", tr?.answer_d]];
+  const left = useCountdown(cur.time_left, q?.id);
+  const stealOpen = cur.steal_eligible && left <= 5 && left > 0;
+  const attempted = (cur.steal_attempted || []).includes(pid) || stole;
+  const doSteal = (L) => { setStole(true); send({ action: "steal", answer: L }); };
   return (
     <div className="p-5 animate-fade-up">
       <p className="uppercase tracking-widest text-xs text-bronze mb-1">{state.current_player?.name}</p>
       <h2 className="font-sans font-bold text-xl text-parchment leading-snug mb-4">{tr?.question}</h2>
+
+      {cur.steal_eligible && (stealOpen && !attempted ? (
+        <div className="rounded-2xl p-4 mb-4 border-2 border-terracotta bg-terracotta/15 animate-scale-in" data-testid="steal-panel">
+          <p className="text-terracotta font-serif text-lg flex items-center gap-2">🕵️ {t("stealBtn")}</p>
+          <p className="text-sand/80 text-xs mb-3">{t("stealPrompt")} · ⏱️ {left}s</p>
+          <div className="grid grid-cols-2 gap-2">
+            {opts.map(([L, text]) => (
+              <button key={L} data-testid={`steal-${L}`} onClick={() => doSteal(L)}
+                className="btn-tactile rounded-xl py-2 px-3 text-left border border-terracotta/60 bg-terracotta/20 text-parchment text-sm hover:bg-terracotta/40"><b>{L}.</b> {text}</button>
+            ))}
+          </div>
+        </div>
+      ) : attempted ? (
+        <div className="rounded-2xl p-3 mb-4 border border-incorrect/60 bg-incorrect/10 text-center" data-testid="steal-failed">
+          <p className="text-incorrect text-sm font-semibold">❌ {t("stealFail")}</p>
+        </div>
+      ) : null)}
+
       <div className="glass rounded-2xl p-4 border-bronze/30 mb-4">
         <p className="text-sand/80 text-sm mb-3">{t("willGetRight")}</p>
         <div className="grid grid-cols-2 gap-3">
@@ -468,8 +503,16 @@ function FeedbackView({ cur, priv, lang, t, send }) {
   const tr = q?.translations?.[lang] || q?.translations?.es;
   const correct = cur.was_correct;
   const result = priv?.last_result;
+  const robbed = result?.type === "stolen" || cur.result_type === "stolen";
   return (
     <div className="p-6 animate-fade-up">
+      {robbed && (
+        <div className="rounded-2xl p-4 mb-5 border-2 border-terracotta bg-terracotta/15 text-center animate-scale-in" data-testid="you-were-robbed">
+          <div className="text-5xl mb-2">🕵️</div>
+          <h2 className="font-serif text-2xl text-terracotta">{t("youWereRobbed")}</h2>
+          <p className="text-sand/80 text-sm mt-1">{cur.stolen_by_name || result?.by_name} +{cur.steal_reward || 3}</p>
+        </div>
+      )}
       <div className={`relative text-center mb-5 ${correct ? "" : "animate-shake"}`}>
         {correct && <SparkleBurst />}
         {correct ? <CheckCircle2 className="w-16 h-16 text-correct mx-auto" /> : <XCircle className="w-16 h-16 text-incorrect mx-auto" />}

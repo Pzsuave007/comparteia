@@ -575,7 +575,7 @@ function GameStage({ state, hostLang, vaultPulse, shownProgress }) {
     <div className="relative min-h-screen overflow-hidden">
       <AdventureMap state={state} />
       <div className="absolute inset-0 pointer-events-none transition-colors duration-500"
-        style={{ background: focus ? "rgba(11,19,32,0.9)" : isLight ? "rgba(11,19,32,0.26)" : "rgba(11,19,32,0.5)" }} />
+        style={{ background: focus ? "rgba(9,15,26,0.97)" : isLight ? "rgba(11,19,32,0.26)" : "rgba(11,19,32,0.5)" }} />
       <Banner />
       <div className="absolute top-4 right-6 z-30">
         <ArchiveVault progress={shownProgress || 0} pulse={vaultPulse} hostLang={hostLang} />
@@ -658,6 +658,12 @@ function QuestionStage({ cur, state, hostLang, pLang }) {
       {cur.time_left != null && (
         <div className="max-w-md mb-8"><TimerBar left={left} total={30} big /></div>
       )}
+      {cur.steal_eligible && left <= 5 && left > 0 && (
+        <div className="mb-6 inline-flex items-center gap-3 self-start px-6 py-3 rounded-2xl bg-terracotta/25 border-2 border-terracotta animate-pulse" data-testid="tv-steal-open">
+          <span className="text-3xl">🕵️</span>
+          <span className="font-display font-800 text-2xl lg:text-3xl text-terracotta">{bi(hostLang, "¡ROBO ABIERTO! ¡Roba en tu teléfono!", "STEAL OPEN! Steal on your phone!")}</span>
+        </div>
+      )}
       {cur.candidate && (
         <div className="flex items-center gap-4 mb-6">
           <img src={cur.candidate.image} alt="" className="w-16 h-16 rounded-xl object-cover border border-bronze/40" />
@@ -692,6 +698,21 @@ function FeedbackStage({ cur, state, hostLang, pLang }) {
   const primary = q?.translations?.[pLang] || q?.translations?.es;
   const correct = cur.was_correct;
   const isVerify = cur.phase_purpose === "verify";
+  const stolen = cur.result_type === "stolen";
+  if (stolen) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-10 py-24 text-center animate-scale-in">
+        <div className="text-8xl mb-4">🕵️</div>
+        <div className="font-display font-800 text-6xl lg:text-7xl text-terracotta mb-4">{bi(hostLang, "¡ROBO!", "STOLEN!")}</div>
+        <p className="font-serif text-4xl text-parchment">{cur.stolen_by_name} {bi(hostLang, `robó el turno (+${cur.steal_reward || 3})`, `stole the turn (+${cur.steal_reward || 3})`)}</p>
+        <div className="glass rounded-3xl p-8 border-bronze/40 max-w-3xl mt-8">
+          <p className="text-2xl text-parchment font-bold mb-2">{cur.correct_answer}. {primary?.["answer_" + cur.correct_answer.toLowerCase()]}</p>
+          <p className="text-xl text-sand/90 mb-3">{primary?.explanation}</p>
+          <p className="text-gold text-lg font-semibold">📖 {cur.bible_reference}</p>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className={`min-h-screen flex flex-col items-center justify-center px-10 py-24 text-center ${correct ? "animate-fade-in" : "animate-shake"}`}>
       <div className="font-display font-800 text-7xl lg:text-8xl mb-6" style={{ color: correct ? "#348C52" : "#B94034" }}>

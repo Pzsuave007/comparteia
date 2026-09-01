@@ -172,6 +172,8 @@ async def handle_action(room, role, pid, msg):
         G.choose_location(room, CONTENT, pid, msg.get("location_id"))
     elif action == "answer":
         G.submit_answer(room, CONTENT, pid, msg.get("answer"))
+    elif action == "steal":
+        G.steal_answer(room, CONTENT, pid, msg.get("answer"))
     elif action == "predict":
         G.predict(room, CONTENT, pid, msg.get("value"))
     elif action == "request_help":
