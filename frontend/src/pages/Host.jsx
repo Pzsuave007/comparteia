@@ -574,14 +574,14 @@ function GameStage({ state, hostLang, vaultPulse, shownProgress }) {
   return (
     <div className="relative min-h-screen overflow-hidden">
       <AdventureMap state={state} />
-      <div className="absolute inset-0 pointer-events-none transition-colors duration-500"
-        style={{ background: focus ? "rgba(9,15,26,0.97)" : isLight ? "rgba(11,19,32,0.26)" : "rgba(11,19,32,0.5)" }} />
+      <div className={`absolute inset-0 pointer-events-none transition-colors duration-500 ${focus ? "z-[15]" : ""}`}
+        style={{ background: focus ? "rgba(9,14,24,1)" : isLight ? "rgba(11,19,32,0.26)" : "rgba(11,19,32,0.5)" }} />
       <Banner />
       <div className="absolute top-4 right-6 z-30">
         <ArchiveVault progress={shownProgress || 0} pulse={vaultPulse} hostLang={hostLang} />
       </div>
       {phase === "feedback" && cur.was_correct && <SparkleBurst key={cur.question?.id} />}
-      {body && <div className="relative z-10">{body}</div>}
+      {body && <div className="relative z-20">{body}</div>}
       {hud}
     </div>
   );
@@ -674,14 +674,14 @@ function QuestionStage({ cur, state, hostLang, pLang }) {
       {secondary && <p className="font-sans italic text-2xl text-sand/60 mt-3">{secondary.question}</p>}
       <div className="grid sm:grid-cols-2 gap-5 mt-10">
         {letters.map((L) => (
-          <div key={L} className="glass rounded-2xl px-6 py-5 border-bronze/30 flex items-center gap-4">
-            <span className="font-display font-bold text-2xl w-12 h-12 flex items-center justify-center rounded-full bg-bronze/20 text-gold shrink-0">{L}</span>
+          <div key={L} className="rounded-2xl px-6 py-5 border-2 border-bronze/50 bg-[#161f30] shadow-lg flex items-center gap-4">
+            <span className="font-display font-bold text-2xl w-12 h-12 flex items-center justify-center rounded-full bg-gold/25 text-gold shrink-0">{L}</span>
             <div className="flex-1">
-              <span className="text-parchment text-2xl font-medium">{primary?.["answer_" + L.toLowerCase()]}</span>
-              {secondary && <span className="block text-sand/50 italic text-lg">{secondary["answer_" + L.toLowerCase()]}</span>}
+              <span className="text-parchment text-2xl font-semibold">{primary?.["answer_" + L.toLowerCase()]}</span>
+              {secondary && <span className="block text-sand/60 italic text-lg">{secondary["answer_" + L.toLowerCase()]}</span>}
             </div>
             {cur.help_requested && votes[L] > 0 && (
-              <span className="font-display font-bold text-gold bg-midnight/50 rounded-full px-3 py-1 text-lg shrink-0">🧭 {votes[L]}</span>
+              <span className="font-display font-bold text-gold bg-midnight/60 rounded-full px-3 py-1 text-lg shrink-0">🧭 {votes[L]}</span>
             )}
           </div>
         ))}
@@ -705,7 +705,7 @@ function FeedbackStage({ cur, state, hostLang, pLang }) {
         <div className="text-8xl mb-4">🕵️</div>
         <div className="font-display font-800 text-6xl lg:text-7xl text-terracotta mb-4">{bi(hostLang, "¡ROBO!", "STOLEN!")}</div>
         <p className="font-serif text-4xl text-parchment">{cur.stolen_by_name} {bi(hostLang, `robó el turno (+${cur.steal_reward || 3})`, `stole the turn (+${cur.steal_reward || 3})`)}</p>
-        <div className="glass rounded-3xl p-8 border-bronze/40 max-w-3xl mt-8">
+        <div className="rounded-3xl p-8 border-2 border-bronze/50 bg-[#161f30] shadow-xl max-w-3xl mt-8">
           <p className="text-2xl text-parchment font-bold mb-2">{cur.correct_answer}. {primary?.["answer_" + cur.correct_answer.toLowerCase()]}</p>
           <p className="text-xl text-sand/90 mb-3">{primary?.explanation}</p>
           <p className="text-gold text-lg font-semibold">📖 {cur.bible_reference}</p>
@@ -718,7 +718,7 @@ function FeedbackStage({ cur, state, hostLang, pLang }) {
       <div className="font-display font-800 text-7xl lg:text-8xl mb-6" style={{ color: correct ? "#348C52" : "#B94034" }}>
         {bi(hostLang, correct ? "✅ ¡CORRECTO!" : "❌ CASI…", correct ? "CORRECT!" : "ALMOST…")}
       </div>
-      <div className="glass rounded-3xl p-8 border-bronze/40 max-w-3xl">
+      <div className="rounded-3xl p-8 border-2 border-bronze/50 bg-[#161f30] shadow-xl max-w-3xl">
         <p className="text-2xl text-parchment font-bold mb-2">{cur.correct_answer}. {primary?.["answer_" + cur.correct_answer.toLowerCase()]}</p>
         <p className="text-xl text-sand/90 mb-3">{primary?.explanation}</p>
         <p className="text-gold text-lg font-semibold">📖 {cur.bible_reference}</p>
