@@ -155,7 +155,7 @@ function PlayerGame({ session, onLeave }) {
     if (r && r !== prevResult.current) {
       const s = state?.sound;
       if (r.type === "clue") play(r.granted ? "clue" : "incorrect", s);
-      if (r.type === "verify") play(r.recovered ? "recovered" : "verify", s);
+      if (r.type === "verify") play("verify", s);
       if (r.type === "trap") play(r.passed ? "correct" : "incorrect", s);
       prevResult.current = r;
     }

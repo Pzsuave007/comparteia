@@ -61,6 +61,11 @@ secret server-side verification, dramatic winner reveal. Bilingual (ES/EN) PER P
   (advance/retreat 1-2 / +2 honor). Secret path tiles + trail to the Temple stay HIDDEN until a player
   recovers all 3 pieces, then appear (gold). Backend: `roll_dice` builds stop options, `choose_stop`,
   `_resolve_surprise`, `surprise_tile` phase (game.py). Validated via engine simulation + TV/phone screenshots.
+- ✅ Secrecy hardening (2026-06): removed the distinct "recovered" TV sound (feedback audio is neutral,
+  identical whether or not a piece was found) and the phone verify sound no longer differs by outcome.
+  The TV vault counter ("ALGUIEN X/3") reveals with a randomized 6-13s delay decoupled from the current
+  turn (shownProgress in HostScreen), so players can't infer who found a piece or when. Reaching 3/3
+  still opens the secret path immediately (endgame race trigger).
 - ✅ Engine validated via deterministic tests (all dice branches, win, security/privacy, clues).
 
 ## Backlog / Remaining

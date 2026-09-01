@@ -334,8 +334,10 @@ function CreateRoom({ onCreated }) {
 function HostScreen({ code }) {
   const { state, send, reaction } = useRoom(code, "host");
   const prevPhase = useRef(null);
-  const prevProgress = useRef(0);
   const [vaultPulse, setVaultPulse] = useState(false);
+  const [shownProgress, setShownProgress] = useState(0);
+  const targetRef = useRef(0);
+  const revealTimer = useRef(null);
 
   useEffect(() => {
     const on = state?.sound && state?.status === "playing";
@@ -343,21 +345,36 @@ function HostScreen({ code }) {
     return () => stopAmbient();
   }, [state?.sound, state?.status]);
 
+  // Delayed, turn-decoupled vault reveal so nobody can tell WHO found a piece or WHEN.
   useEffect(() => {
     if (!state || state.status !== "playing") return;
     const mp = state.max_progress || 0;
-    if (mp > prevProgress.current) {
-      play("recovered", state.sound);
-      setVaultPulse(true);
-      setTimeout(() => setVaultPulse(false), 2600);
+    targetRef.current = mp;
+    if (mp < shownProgress) {                 // new game / reset
+      if (revealTimer.current) { clearTimeout(revealTimer.current); revealTimer.current = null; }
+      setShownProgress(mp);
+      return;
     }
-    prevProgress.current = mp;
-  }, [state?.max_progress, state?.status]);
+    if (mp > shownProgress && !revealTimer.current) {
+      const delay = 6000 + Math.random() * 7000;   // 6-13s, unrelated to the current turn
+      revealTimer.current = setTimeout(() => {
+        revealTimer.current = null;
+        setShownProgress((prev) => {
+          const next = targetRef.current;
+          if (next > prev) { setVaultPulse(true); setTimeout(() => setVaultPulse(false), 2600); }
+          return next;
+        });
+      }, delay);
+    }
+  }, [state?.max_progress, state?.status, shownProgress]);
+
+  useEffect(() => () => { if (revealTimer.current) clearTimeout(revealTimer.current); }, []);
 
   useEffect(() => {
     if (!state) return;
     if (state.phase !== prevPhase.current) {
       const s = state.sound;
+      // Neutral audio: same sound whether or not a piece was recovered (no secrecy leak).
       if (state.phase === "dice") play("dice", s);
       else if (state.phase === "travel") play("travel", s);
       else if (state.phase === "feedback") play(state.current?.was_correct ? "correct" : "incorrect", s);
@@ -373,7 +390,7 @@ function HostScreen({ code }) {
   return (
     <div className="relative min-h-screen overflow-hidden grain tv-vignette bg-midnight">
       {state.status === "lobby" && <Lobby state={state} send={send} />}
-      {state.status === "playing" && <GameStage state={state} hostLang={hostLang} vaultPulse={vaultPulse} />}
+      {state.status === "playing" && <GameStage state={state} hostLang={hostLang} vaultPulse={vaultPulse} shownProgress={shownProgress} />}
       {state.status === "finished" && <WinnerReveal state={state} send={send} />}
       {state.status !== "lobby" && <ControlBar state={state} send={send} />}
       <ReactionOverlay reaction={reaction} />
@@ -449,7 +466,7 @@ function Lobby({ state, send }) {
 }
 
 /* ------------------------------ GAME STAGE ------------------------------ */
-function GameStage({ state, hostLang, vaultPulse }) {
+function GameStage({ state, hostLang, vaultPulse, shownProgress }) {
   const cur = state.current || {};
   const phase = state.phase;
   const player = state.current_player;
@@ -561,7 +578,7 @@ function GameStage({ state, hostLang, vaultPulse }) {
         style={{ background: focus ? "rgba(11,19,32,0.9)" : isLight ? "rgba(11,19,32,0.26)" : "rgba(11,19,32,0.5)" }} />
       <Banner />
       <div className="absolute top-4 right-6 z-30">
-        <ArchiveVault progress={state.max_progress || 0} pulse={vaultPulse} hostLang={hostLang} />
+        <ArchiveVault progress={shownProgress || 0} pulse={vaultPulse} hostLang={hostLang} />
       </div>
       {phase === "feedback" && cur.was_correct && <SparkleBurst key={cur.question?.id} />}
       {body && <div className="relative z-10">{body}</div>}
