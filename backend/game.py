@@ -293,6 +293,15 @@ def _advance_player(room):
     room["current"] = {}
 
 
+def pass_turn(room, content, pid):
+    """Let the active player bail out of a selection phase so they are never stuck
+    (e.g. every candidate in a category is already discarded/recovered)."""
+    if pid != current_player_id(room):
+        return
+    if room["phase"] in ("dice", "choose_category", "choose_candidate", "choose_location", "travel"):
+        _advance_player(room)
+
+
 def claim_win(room, content, pid):
     priv = room["private"].get(pid)
     if not priv or not priv["can_win"]:

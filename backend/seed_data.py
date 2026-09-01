@@ -10,6 +10,45 @@ def _img(h):
     return IMG.format(h)
 
 
+# Cartoon (family-friendly) illustration set, keyed by "category:id".
+IMAGES = {
+    "character:jesus": _img("6e3c440ae3e668bde6460e68ec331659cc1cce4f7f2c9c493a0611bb6c69deba"),
+    "character:pablo": _img("b223ce2d46b918e124e768cf385c0c34285fe3ed453dc342e6522157ea8557c1"),
+    "character:moises": _img("46f0f3deed115ead0b979e2c3545f72ed0405e7631532ae79d5c04c794a5c22f"),
+    "character:david": _img("5ab6f382be31b0bf35e090d8126a4c6e0fe77f23fe4fb0ceaf39fc254e21e47d"),
+    "character:ester": _img("ccaae56327091fbc9c2e7addcfb81f48837889296b4fa143ac6f57d6a0927fa2"),
+    "character:daniel": _img("56a2ff2186c15bf3bba9423d43b2092e886feb5307f7487b25ecf2a760443bec"),
+    "character:pedro": _img("7f33a150367f0f35f24d4a2073c852790e02d0cc6c663698ba47a524b16bf57b"),
+    "character:rahab": _img("2baca85f9fda71ac6d56e7b0b6b5a60973fc3cd49d9e4ed91422dc518b409589"),
+    "character:gedeon": _img("3f6a41e62803a8392c95d851ed3b2347be5d5a2d6dcce8369a6261f679cf842c"),
+    "character:elias": _img("1f8005d790a8834027423dacc99b1e69f6f9e9fc53699028ff10b158372c7ae1"),
+    "location:jerusalen": _img("273d73d33f984c4925772dbb33fe5b0521fcfe5940b242129beab8248e3ddea6"),
+    "location:jerico": _img("66bd74b5573d848627529633f11b2e1a5395e6afdebc26074564943e041ddfa6"),
+    "location:belen": _img("82cc9b8ea5032db3c9a4b243c959cce7d0d4918331ec111d9874157610c4861b"),
+    "location:galilea": _img("03b2d46f1ade691970822086bcb2dc8ed2e36f736fb47140571670047d81cae5"),
+    "location:babilonia": _img("1dada1fab843621349b714cb8c63138a89e35f6cd130597b67cb6e270335685b"),
+    "location:egipto": _img("8931587a8a9bf05e6db4b481cf2d9a751a8861f738e302cdfbf9049d061e8368"),
+    "location:ninive": _img("288f17d6f58361c1c7877df7d5ce4cbd2a4602ec46f12d6a3d15e3d9371c81f6"),
+    "location:carmelo": _img("3a6e13b9a2b143c32533ab01d1cdeeba1fda55b21ba3033cc30d2e4d899675c5"),
+    "location:ararat": _img("99597cfd0de4e9433fb71129eb96686aee4309ab4e3e712a48ac3b6c7706318d"),
+    "location:damasco": _img("5a089422a05c6130efacfb45121adf864bbc290a90dd8be2dc4d152c89412af0"),
+    "event:mar_rojo": _img("e30b59e80c3e8867c1060def0afcae481856705c894db093ad29e6522edbb8c4"),
+    "event:jerico": _img("a8592c34b8c2edd302d4a8dbf3818e97ab1b1763346528bafa46091064638893"),
+    "event:carmelo": _img("570341ca513744dda431b1e3c8e86578ca7355859e8546e5498e715713b19451"),
+    "event:daniel_leones": _img("80ca74cd3de1cfe14657a9e6011f849cd6273ac9ce6405a97021dacccde7b434"),
+    "event:diluvio": _img("a27ef5e02ce7c673fa9ae97d183a4ab78695aa19d1fa7a1ccd4b10925aebcab7"),
+    "event:david_goliat": _img("c21dd0e5c70f01b55b59ae5c830a4af0bb2df9f86b9a598568b4cec18ac4f0fc"),
+    "event:jesus_tormenta": _img("00467e5085b2d413875bca0696fd97487f21afabc8f092e01459e7319423fa22"),
+    "event:tres_hebreos": _img("d06642999944d7e38033fe648fc6479aaae914b9986d8296ea3a9041d34848af"),
+    "event:jonas": _img("f4e56c171b376800b97962ab4bf0d5b07fa02440d70738349687519dcf332fb3"),
+    "event:ultima_cena": _img("d3403330aee6b4fc1da60da55f43bedbe0aa022ff54376256735a5f61271af33"),
+}
+
+
+def _pick_img(category, eid, fallback):
+    return IMAGES.get(f"{category}:{eid}", fallback)
+
+
 # ----------------------------- CHARACTERS -----------------------------
 CHARACTERS = [
     {
@@ -218,7 +257,7 @@ def _build_locations():
     for l in LOCATIONS:
         out.append({
             "id": l["id"], "category": "location", "active": True,
-            "image": _img(l["hash"]), "map_position": l["map"], "references": l["ref"],
+            "image": _pick_img("location", l["id"], _img(l["hash"])), "map_position": l["map"], "references": l["ref"],
             "translations": {"es": {"name": l["es"][0], "description": l["es"][1]},
                              "en": {"name": l["en"][0], "description": l["en"][1]}},
             "clues": {"es": ["El lugar perdido aparece en las Escrituras."] + l["clues_es"],
@@ -232,7 +271,7 @@ def _build_events():
     for e in EVENTS:
         out.append({
             "id": e["id"], "category": "event", "active": True,
-            "image": _img(e["hash"]), "references": e["ref"],
+            "image": _pick_img("event", e["id"], _img(e["hash"])), "references": e["ref"],
             "translations": {"es": {"name": e["es"][0], "description": e["es"][1]},
                              "en": {"name": e["en"][0], "description": e["en"][1]}},
             "clues": {"es": ["El acontecimiento perdido aparece en la Biblia."] + e["clues_es"],
@@ -242,7 +281,8 @@ def _build_events():
 
 
 def all_entities():
-    return CHARACTERS + _build_locations() + _build_events()
+    chars = [{**c, "image": _pick_img("character", c["id"], c["image"])} for c in CHARACTERS]
+    return chars + _build_locations() + _build_events()
 
 
 # ----------------------------- QUESTIONS -----------------------------
@@ -321,24 +361,24 @@ QUESTIONS = [
     Q("q_galilea_1", "location", "galilea", "investigator", "A", "Mateo 4:18",
       ("¿Qué caracteriza a la región de Galilea?", ["Su lago y pescadores", "Sus pirámides", "Sus leones", "Su desierto sin agua"], "Galilea es conocida por su lago donde muchos eran pescadores."),
       ("What characterizes the region of Galilee?", ["Its lake and fishermen", "Its pyramids", "Its lions", "Its waterless desert"], "Galilee is known for its lake where many were fishermen.")),
-    Q("q_babilonia_1", "location", "babilonia", "archaeologist", "D", "Daniel 1:1",
-      ("¿A qué ciudad fue llevado cautivo Daniel?", ["Egipto", "Nínive", "Roma", "Babilonia"], "Daniel fue llevado cautivo a Babilonia."),
-      ("To which city was Daniel taken captive?", ["Egypt", "Nineveh", "Rome", "Babylon"], "Daniel was taken captive to Babylon.")),
-    Q("q_egipto_1", "location", "egipto", "explorer", "C", "Éxodo 1:8",
-      ("¿De qué tierra salió Israel guiado por Moisés?", ["Babilonia", "Jericó", "Egipto", "Nínive"], "Israel salió de Egipto donde había estado esclavo."),
-      ("From which land did Israel leave, led by Moses?", ["Babylon", "Jericho", "Egypt", "Nineveh"], "Israel left Egypt where they had been slaves.")),
-    Q("q_ninive_1", "location", "ninive", "archaeologist", "B", "Jonás 3:2",
-      ("¿A qué ciudad fue enviado Jonás a predicar?", ["Damasco", "Nínive", "Belén", "Ararat"], "Jonás fue enviado a la gran ciudad de Nínive."),
-      ("To which city was Jonah sent to preach?", ["Damascus", "Nineveh", "Bethlehem", "Ararat"], "Jonah was sent to the great city of Nineveh.")),
-    Q("q_carmelo_1", "location", "carmelo", "investigator", "A", "1 Reyes 18:20",
-      ("¿En qué monte pidió Elías fuego del cielo?", ["Carmelo", "Ararat", "Sinaí", "Sion"], "El desafío de Elías ocurrió en el Monte Carmelo."),
-      ("On which mountain did Elijah ask for fire from heaven?", ["Carmel", "Ararat", "Sinai", "Zion"], "Elijah's challenge took place on Mount Carmel.")),
-    Q("q_ararat_1", "location", "ararat", "archaeologist", "D", "Génesis 8:4",
-      ("¿Sobre qué montes reposó el arca de Noé?", ["Sinaí", "Carmelo", "Olivos", "Ararat"], "El arca reposó sobre los montes de Ararat."),
-      ("On which mountains did Noah's ark rest?", ["Sinai", "Carmel", "Olives", "Ararat"], "The ark rested on the mountains of Ararat.")),
-    Q("q_damasco_1", "location", "damasco", "investigator", "B", "Hechos 9:3",
-      ("¿Camino a qué ciudad cambió la vida de Pablo?", ["Roma", "Damasco", "Corinto", "Atenas"], "Pablo tuvo su encuentro con Jesús camino a Damasco."),
-      ("On the road to which city did Paul's life change?", ["Rome", "Damascus", "Corinth", "Athens"], "Paul had his encounter with Jesus on the road to Damascus.")),
+    Q("q_babilonia_1", "location", "babilonia", "archaeologist", "A", "Daniel 2:1",
+      ("¿Qué rey de Babilonia tuvo el sueño de la gran estatua?", ["Nabucodonosor", "Ciro", "Darío", "Belsasar"], "Nabucodonosor tuvo el sueño de la estatua que Daniel interpretó."),
+      ("Which king of Babylon had the dream of the great statue?", ["Nebuchadnezzar", "Cyrus", "Darius", "Belshazzar"], "Nebuchadnezzar had the dream of the statue that Daniel interpreted.")),
+    Q("q_egipto_1", "location", "egipto", "investigator", "C", "Éxodo 12:29",
+      ("¿Cuál fue la última plaga que Dios envió sobre Egipto?", ["Las ranas", "Las langostas", "La muerte de los primogénitos", "El granizo"], "La décima y última plaga fue la muerte de los primogénitos."),
+      ("What was the last plague God sent upon Egypt?", ["The frogs", "The locusts", "The death of the firstborn", "The hail"], "The tenth and final plague was the death of the firstborn.")),
+    Q("q_ninive_1", "location", "ninive", "archaeologist", "B", "Nahúm 1:1",
+      ("¿De qué gran imperio fue capital la ciudad de Nínive?", ["Babilónico", "Asirio", "Persa", "Romano"], "Nínive fue la capital del poderoso imperio asirio."),
+      ("Of which great empire was the city of Nineveh the capital?", ["Babylonian", "Assyrian", "Persian", "Roman"], "Nineveh was the capital of the mighty Assyrian empire.")),
+    Q("q_carmelo_1", "location", "carmelo", "archaeologist", "C", "1 Reyes 18:22",
+      ("¿A cuántos profetas de Baal se enfrentó Elías en el Monte Carmelo?", ["100", "300", "450", "850"], "Elías se enfrentó él solo a 450 profetas de Baal."),
+      ("How many prophets of Baal did Elijah face on Mount Carmel?", ["100", "300", "450", "850"], "Elijah faced 450 prophets of Baal by himself.")),
+    Q("q_ararat_1", "location", "ararat", "investigator", "B", "Génesis 8:11",
+      ("¿Qué ave regresó al arca con una hoja de olivo?", ["El cuervo", "La paloma", "El águila", "La golondrina"], "La paloma volvió con una hoja de olivo, señal de que bajaban las aguas."),
+      ("Which bird returned to the ark with an olive leaf?", ["The raven", "The dove", "The eagle", "The swallow"], "The dove returned with an olive leaf, a sign the waters were receding.")),
+    Q("q_damasco_1", "location", "damasco", "archaeologist", "B", "Hechos 9:17",
+      ("¿Quién impuso las manos sobre Pablo en Damasco para devolverle la vista?", ["Bernabé", "Ananías", "Pedro", "Timoteo"], "Ananías impuso las manos sobre Saulo y este recobró la vista."),
+      ("Who laid hands on Paul in Damascus to restore his sight?", ["Barnabas", "Ananias", "Peter", "Timothy"], "Ananias laid hands on Saul and he regained his sight.")),
 
     # ---- EVENTS ----
     Q("q_mar_rojo_1", "event", "mar_rojo", "explorer", "A", "Éxodo 14:21",
@@ -391,4 +431,114 @@ QUESTIONS = [
     Q("q_gen_6", "general", None, "archaeologist", "C", "1 Reyes 3:9",
       ("¿Qué le pidió Salomón a Dios principalmente?", ["Riquezas", "Larga vida", "Sabiduría", "Victoria"], "Salomón pidió sabiduría para gobernar al pueblo."),
       ("What did Solomon mainly ask God for?", ["Riches", "Long life", "Wisdom", "Victory"], "Solomon asked for wisdom to govern the people.")),
+]
+
+# ---- Additional coverage + harder ARCHAEOLOGIST questions ----
+QUESTIONS += [
+    # LOCATIONS (answer is never the chosen city)
+    Q("q_babilonia_2", "location", "babilonia", "explorer", "A", "Daniel 1:6",
+      ("¿Qué joven fiel fue llevado cautivo a la ciudad de Babilonia?", ["Daniel", "Josué", "Pedro", "Elías"], "Daniel y sus amigos fueron llevados cautivos a Babilonia."),
+      ("Which faithful young man was taken captive to the city of Babylon?", ["Daniel", "Joshua", "Peter", "Elijah"], "Daniel and his friends were taken captive to Babylon.")),
+    Q("q_egipto_2", "location", "egipto", "explorer", "B", "Éxodo 3:10",
+      ("¿Quién sacó al pueblo de Israel de la esclavitud en Egipto?", ["Josué", "Moisés", "Aarón", "David"], "Dios usó a Moisés para liberar a Israel de Egipto."),
+      ("Who led the people of Israel out of slavery in Egypt?", ["Joshua", "Moses", "Aaron", "David"], "God used Moses to free Israel from Egypt.")),
+    Q("q_ninive_2", "location", "ninive", "explorer", "B", "Jonás 3:2",
+      ("¿Qué profeta fue enviado a predicar a la gran ciudad de Nínive?", ["Elías", "Jonás", "Amós", "Oseas"], "Jonás fue enviado a advertir a Nínive."),
+      ("Which prophet was sent to preach to the great city of Nineveh?", ["Elijah", "Jonah", "Amos", "Hosea"], "Jonah was sent to warn Nineveh.")),
+    Q("q_carmelo_2", "location", "carmelo", "explorer", "B", "1 Reyes 18:20",
+      ("¿Qué profeta desafió a los falsos profetas en el Monte Carmelo?", ["Eliseo", "Elías", "Samuel", "Natán"], "Elías desafió a los profetas de Baal en el Carmelo."),
+      ("Which prophet challenged the false prophets on Mount Carmel?", ["Elisha", "Elijah", "Samuel", "Nathan"], "Elijah challenged the prophets of Baal on Carmel.")),
+    Q("q_ararat_2", "location", "ararat", "explorer", "A", "Génesis 8:4",
+      ("¿Qué embarcación reposó sobre los montes de Ararat?", ["El arca de Noé", "La barca de Pedro", "Una balsa", "Un bote de juncos"], "El arca de Noé reposó sobre los montes de Ararat."),
+      ("Which vessel rested on the mountains of Ararat?", ["Noah's ark", "Peter's boat", "A raft", "A reed basket"], "Noah's ark rested on the mountains of Ararat.")),
+    Q("q_damasco_2", "location", "damasco", "explorer", "B", "Hechos 9:3",
+      ("¿Quién iba camino a Damasco cuando una luz del cielo lo cegó?", ["Pedro", "Saulo", "Esteban", "Felipe"], "Saulo (Pablo) fue cegado por una luz camino a Damasco."),
+      ("Who was on the road to Damascus when a light from heaven blinded him?", ["Peter", "Saul", "Stephen", "Philip"], "Saul (Paul) was blinded by a light on the road to Damascus.")),
+    Q("q_jerusalen_2", "location", "jerusalen", "archaeologist", "B", "2 Samuel 5:7",
+      ("¿Qué rey capturó Jerusalén y la convirtió en su capital?", ["Saúl", "David", "Salomón", "Ezequías"], "David tomó la fortaleza de Sion e hizo de Jerusalén su capital."),
+      ("Which king captured Jerusalem and made it his capital?", ["Saul", "David", "Solomon", "Hezekiah"], "David took the stronghold of Zion and made Jerusalem his capital.")),
+    Q("q_jerico_2", "location", "jerico", "archaeologist", "B", "Josué 6:15",
+      ("¿Cuántos días marchó Israel alrededor de Jericó antes de que cayeran los muros?", ["3", "7", "12", "40"], "Israel marchó siete días; al séptimo rodearon la ciudad siete veces."),
+      ("How many days did Israel march around Jericho before the walls fell?", ["3", "7", "12", "40"], "Israel marched seven days; on the seventh they circled the city seven times.")),
+    Q("q_belen_2", "location", "belen", "investigator", "B", "1 Samuel 16:1",
+      ("¿Qué gran rey de Israel también nació en Belén?", ["Saúl", "David", "Salomón", "Acab"], "David, el pastor que llegó a ser rey, nació en Belén."),
+      ("Which great king of Israel was also born in Bethlehem?", ["Saul", "David", "Solomon", "Ahab"], "David, the shepherd who became king, was born in Bethlehem.")),
+    Q("q_galilea_2", "location", "galilea", "archaeologist", "B", "Juan 2:11",
+      ("¿En qué pueblo de Galilea convirtió Jesús el agua en vino?", ["Nazaret", "Caná", "Capernaúm", "Betsaida"], "El primer milagro de Jesús fue en las bodas de Caná de Galilea."),
+      ("In which town of Galilee did Jesus turn water into wine?", ["Nazareth", "Cana", "Capernaum", "Bethsaida"], "Jesus' first miracle was at the wedding in Cana of Galilee.")),
+
+    # CHARACTERS (harder)
+    Q("q_jesus_3", "character", "jesus", "archaeologist", "B", "Mateo 26:36",
+      ("¿Cómo se llamaba el huerto donde Jesús oró la noche de su arresto?", ["Edén", "Getsemaní", "Betania", "Gólgota"], "Jesús oró en el huerto de Getsemaní antes de ser arrestado."),
+      ("What was the name of the garden where Jesus prayed the night of his arrest?", ["Eden", "Gethsemane", "Bethany", "Golgotha"], "Jesus prayed in the garden of Gethsemane before his arrest.")),
+    Q("q_pablo_3", "character", "pablo", "archaeologist", "B", "Hechos 18:3",
+      ("¿Cuál era el oficio manual del apóstol Pablo?", ["Médico", "Fabricante de tiendas", "Pescador", "Carpintero"], "Pablo se sostenía fabricando tiendas de campaña."),
+      ("What was the apostle Paul's trade?", ["Doctor", "Tentmaker", "Fisherman", "Carpenter"], "Paul supported himself by making tents.")),
+    Q("q_daniel_2", "character", "daniel", "archaeologist", "A", "Daniel 1:7",
+      ("¿Qué nombre babilónico recibió Daniel?", ["Beltsasar", "Sadrac", "Abed-nego", "Mesac"], "En Babilonia a Daniel le pusieron el nombre de Beltsasar."),
+      ("What Babylonian name was given to Daniel?", ["Belteshazzar", "Shadrach", "Abednego", "Meshach"], "In Babylon, Daniel was given the name Belteshazzar.")),
+    Q("q_ester_2", "character", "ester", "archaeologist", "B", "Ester 2:7",
+      ("¿Quién era el primo que crió a Ester?", ["Nehemías", "Mardoqueo", "Booz", "Esdras"], "Mardoqueo, su primo, crió a Ester como hija."),
+      ("Who was the cousin who raised Esther?", ["Nehemiah", "Mordecai", "Boaz", "Ezra"], "Mordecai, her cousin, raised Esther as his own daughter.")),
+    Q("q_pedro_2", "character", "pedro", "archaeologist", "C", "Lucas 22:34",
+      ("¿Cuántas veces negó Pedro conocer a Jesús?", ["Una", "Dos", "Tres", "Siete"], "Pedro negó a Jesús tres veces antes de que cantara el gallo."),
+      ("How many times did Peter deny knowing Jesus?", ["Once", "Twice", "Three times", "Seven times"], "Peter denied Jesus three times before the rooster crowed.")),
+    Q("q_elias_2", "character", "elias", "archaeologist", "B", "2 Reyes 2:11",
+      ("¿Cómo fue llevado Elías al cielo?", ["En una nube", "En un torbellino con un carro de fuego", "En un sueño", "Sobre un águila"], "Elías subió al cielo en un torbellino con un carro de fuego."),
+      ("How was Elijah taken up to heaven?", ["In a cloud", "In a whirlwind with a chariot of fire", "In a dream", "On an eagle"], "Elijah went up to heaven in a whirlwind with a chariot of fire.")),
+    Q("q_moises_3", "character", "moises", "investigator", "C", "Números 14:33",
+      ("¿Cuántos años vagó Israel por el desierto?", ["7", "12", "40", "70"], "Israel vagó 40 años por el desierto antes de entrar a la tierra prometida."),
+      ("How many years did Israel wander in the wilderness?", ["7", "12", "40", "70"], "Israel wandered 40 years in the wilderness before entering the promised land.")),
+    Q("q_gedeon_2", "character", "gedeon", "investigator", "B", "Jueces 6:37",
+      ("¿Con qué señal confirmó Dios el llamado de Gedeón?", ["Un arcoíris", "Un vellón de lana", "Una estrella", "Una zarza"], "Gedeón pidió señales con un vellón de lana."),
+      ("With what sign did God confirm Gideon's call?", ["A rainbow", "A fleece of wool", "A star", "A bush"], "Gideon asked for signs using a fleece of wool.")),
+    Q("q_rahab_2", "character", "rahab", "archaeologist", "B", "Josué 2:18",
+      ("¿Qué colgó Rahab de su ventana como señal para los espías?", ["Una lámpara", "Un cordón escarlata", "Una bandera", "Una rama"], "Rahab ató un cordón escarlata a su ventana como señal."),
+      ("What did Rahab hang from her window as a sign for the spies?", ["A lamp", "A scarlet cord", "A flag", "A branch"], "Rahab tied a scarlet cord to her window as a sign.")),
+    Q("q_david_4", "character", "david", "archaeologist", "A", "2 Samuel 15:13",
+      ("¿Cuál de los hijos de David se rebeló contra él y quiso quitarle el trono?", ["Absalón", "Salomón", "Adonías", "Natán"], "Absalón se rebeló contra su padre David."),
+      ("Which of David's sons rebelled against him to seize the throne?", ["Absalom", "Solomon", "Adonijah", "Nathan"], "Absalom rebelled against his father David.")),
+
+    # EVENTS (harder)
+    Q("q_mar_rojo_2", "event", "mar_rojo", "archaeologist", "A", "Éxodo 14:16",
+      ("¿Qué extendió Moisés sobre el mar para que se dividiera?", ["Su vara", "Una trompeta", "Una espada", "Un manto"], "Moisés extendió su vara y su mano, y el mar se dividió."),
+      ("What did Moses stretch out over the sea to divide it?", ["His staff", "A trumpet", "A sword", "A cloak"], "Moses stretched out his staff and hand, and the sea divided.")),
+    Q("q_diluvio_2", "event", "diluvio", "archaeologist", "C", "Génesis 7:12",
+      ("¿Cuántos días y noches llovió durante el Diluvio?", ["7", "12", "40", "150"], "Llovió cuarenta días y cuarenta noches sobre la tierra."),
+      ("How many days and nights did it rain during the Flood?", ["7", "12", "40", "150"], "It rained forty days and forty nights upon the earth.")),
+    Q("q_david_goliat_2", "event", "david_goliat", "investigator", "C", "1 Samuel 17:40",
+      ("¿Cuántas piedras lisas tomó David del arroyo?", ["1", "3", "5", "7"], "David escogió cinco piedras lisas del arroyo."),
+      ("How many smooth stones did David take from the brook?", ["1", "3", "5", "7"], "David chose five smooth stones from the brook.")),
+    Q("q_jonas_2", "event", "jonas", "investigator", "B", "Jonás 1:17",
+      ("¿Cuántos días estuvo Jonás dentro del gran pez?", ["1", "3", "7", "40"], "Jonás estuvo tres días y tres noches dentro del gran pez."),
+      ("How many days was Jonah inside the great fish?", ["1", "3", "7", "40"], "Jonah was inside the great fish for three days and three nights.")),
+    Q("q_tres_hebreos_2", "event", "tres_hebreos", "investigator", "C", "Daniel 3:19",
+      ("¿Qué rey ordenó lanzar a los tres hebreos al horno de fuego?", ["Darío", "Ciro", "Nabucodonosor", "Belsasar"], "Nabucodonosor ordenó lanzarlos al horno por no adorar la estatua."),
+      ("Which king ordered the three Hebrews thrown into the fiery furnace?", ["Darius", "Cyrus", "Nebuchadnezzar", "Belshazzar"], "Nebuchadnezzar ordered them thrown in for refusing to worship the statue.")),
+    Q("q_ultima_cena_2", "event", "ultima_cena", "archaeologist", "C", "Lucas 22:47",
+      ("¿Qué discípulo traicionó a Jesús esa misma noche?", ["Pedro", "Tomás", "Judas Iscariote", "Felipe"], "Judas Iscariote traicionó a Jesús con un beso."),
+      ("Which disciple betrayed Jesus that same night?", ["Peter", "Thomas", "Judas Iscariot", "Philip"], "Judas Iscariot betrayed Jesus with a kiss.")),
+    Q("q_daniel_leones_2", "event", "daniel_leones", "investigator", "B", "Daniel 6:16",
+      ("¿Qué rey ordenó, a su pesar, echar a Daniel al foso de los leones?", ["Nabucodonosor", "Darío", "Ciro", "Belsasar"], "El rey Darío fue engañado y tuvo que echar a Daniel al foso."),
+      ("Which king reluctantly ordered Daniel thrown into the lions' den?", ["Nebuchadnezzar", "Darius", "Cyrus", "Belshazzar"], "King Darius was tricked and had to throw Daniel into the den.")),
+    Q("q_jerico_evt_2", "event", "jerico", "archaeologist", "B", "Josué 6:2",
+      ("¿Quién dirigió a Israel en la conquista de Jericó?", ["Moisés", "Josué", "Caleb", "Gedeón"], "Josué dirigió a Israel en la toma de Jericó."),
+      ("Who led Israel in the conquest of Jericho?", ["Moses", "Joshua", "Caleb", "Gideon"], "Joshua led Israel in the taking of Jericho.")),
+    Q("q_carmelo_evt_2", "event", "carmelo", "archaeologist", "B", "1 Reyes 18:33",
+      ("¿Qué hizo Elías para que el milagro del fuego fuera aún más asombroso?", ["Ayunó", "Mandó echar agua sobre el altar", "Cavó un pozo", "Oró de noche"], "Elías hizo empapar el altar con agua antes de que cayera el fuego."),
+      ("What did Elijah do to make the fire miracle even more astonishing?", ["Fasted", "Had water poured on the altar", "Dug a well", "Prayed at night"], "Elijah had the altar drenched with water before the fire fell.")),
+
+    # GENERAL (harder + coverage)
+    Q("q_gen_7", "general", None, "archaeologist", "A", "Nuevo Testamento",
+      ("¿Cuántos libros tiene el Nuevo Testamento?", ["27", "39", "66", "12"], "El Nuevo Testamento está compuesto por 27 libros."),
+      ("How many books are in the New Testament?", ["27", "39", "66", "12"], "The New Testament is made up of 27 books.")),
+    Q("q_gen_8", "general", None, "archaeologist", "B", "Mateo 3:13",
+      ("¿Quién bautizó a Jesús en el río Jordán?", ["Pedro", "Juan el Bautista", "Andrés", "Elías"], "Juan el Bautista bautizó a Jesús en el Jordán."),
+      ("Who baptized Jesus in the Jordan river?", ["Peter", "John the Baptist", "Andrew", "Elijah"], "John the Baptist baptized Jesus in the Jordan.")),
+    Q("q_gen_9", "general", None, "archaeologist", "B", "Salmos",
+      ("¿Cuál es el libro con más capítulos en la Biblia?", ["Génesis", "Salmos", "Isaías", "Jeremías"], "El libro de los Salmos tiene 150 capítulos, el mayor número."),
+      ("Which book has the most chapters in the Bible?", ["Genesis", "Psalms", "Isaiah", "Jeremiah"], "The book of Psalms has 150 chapters, the most of any book.")),
+    Q("q_gen_10", "general", None, "investigator", "C", "Marcos 3:14",
+      ("¿A cuántos discípulos escogió Jesús como apóstoles?", ["7", "10", "12", "40"], "Jesús escogió a doce discípulos como apóstoles."),
+      ("How many disciples did Jesus choose as apostles?", ["7", "10", "12", "40"], "Jesus chose twelve disciples as apostles.")),
 ]

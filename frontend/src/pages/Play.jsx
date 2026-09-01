@@ -356,6 +356,7 @@ function TurnView({ state, priv, send, lang, t }) {
             );
           })}
         </div>
+        <PassBtn send={send} t={t} />
       </div>
     );
   }
@@ -380,6 +381,7 @@ function TurnView({ state, priv, send, lang, t }) {
             );
           })}
         </div>
+        <PassBtn send={send} t={t} />
       </div>
     );
   }
@@ -403,6 +405,7 @@ function TurnView({ state, priv, send, lang, t }) {
             );
           })}
         </div>
+        <PassBtn send={send} t={t} />
       </div>
     );
   }
@@ -451,6 +454,17 @@ function ContinueBtn({ send, t, label }) {
       className="btn-tactile bg-gold text-midnight border-[#a9822f] font-bold text-xl rounded-2xl px-10 py-4 hover:bg-bronze inline-flex items-center gap-2">
       {label} <ChevronRight className="w-5 h-5" />
     </button>
+  );
+}
+
+function PassBtn({ send, t }) {
+  return (
+    <div className="text-center mt-8">
+      <button data-testid="pass-turn-btn" onClick={() => send({ action: "pass" })}
+        className="text-sand/60 hover:text-bronze underline underline-offset-4 text-sm">
+        {t("endTurn")}
+      </button>
+    </div>
   );
 }
 

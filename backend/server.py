@@ -162,6 +162,8 @@ async def handle_action(room, role, pid, msg):
         G.choose_location(room, CONTENT, pid, msg.get("location_id"))
     elif action == "answer":
         G.submit_answer(room, CONTENT, pid, msg.get("answer"))
+    elif action == "pass":
+        G.pass_turn(room, CONTENT, pid)
     elif action == "claim_win":
         G.claim_win(room, CONTENT, pid)
 
