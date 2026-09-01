@@ -9,6 +9,7 @@ import { useT, loc } from "@/i18n";
 import { useRoom, BACKEND } from "@/useRoom";
 import Dice from "@/components/Dice";
 import { play } from "@/sounds";
+import { EmojiBar, TimerBar, useCountdown } from "@/components/interactions";
 
 const API = `${BACKEND}/api`;
 const SKEY = "archivo_session";
@@ -256,7 +257,7 @@ function PlayerGame({ session, onLeave }) {
         ) : isMyTurn ? (
           <TurnView state={state} priv={priv} send={send} lang={lang} t={t} />
         ) : (
-          <WaitTurn state={state} t={t} />
+          <WaitTurn state={state} t={t} send={send} pid={pid} lang={lang} />
         )}
       </div>
 
@@ -298,13 +299,72 @@ function LobbyWait({ session, t }) {
   );
 }
 
-function WaitTurn({ state, t }) {
+function WaitTurn({ state, t, send, pid, lang }) {
+  if (state.phase === "question") {
+    return <SpectatorQuestion state={state} t={t} send={send} lang={lang} />;
+  }
   return (
     <div className="p-8 text-center flex flex-col items-center justify-center min-h-[60vh]">
       <Compass className="w-14 h-14 text-bronze/60 animate-spin-slow mb-6" style={{ animationDuration: "10s" }} />
       <p className="text-sand/70 uppercase tracking-widest text-xs mb-2">{t("turnOf")}</p>
       <h2 className="font-serif text-4xl text-gold">{state.current_player?.name}</h2>
-      <p className="text-sand/60 mt-8">{t("waitTurn")}</p>
+      <p className="text-sand/60 mt-8 mb-8">{t("waitTurn")}</p>
+      <p className="text-sand/50 text-xs uppercase tracking-widest mb-3">{t("reactLabel")}</p>
+      <EmojiBar send={send} />
+    </div>
+  );
+}
+
+function SpectatorQuestion({ state, t, send, lang }) {
+  const cur = state.current || {};
+  const q = cur.question;
+  const tr = q?.translations?.[lang] || q?.translations?.es;
+  const [predicted, setPredicted] = useState(null);
+  const [voted, setVoted] = useState(null);
+  const lastId = useRef(null);
+  useEffect(() => { if (q?.id !== lastId.current) { lastId.current = q?.id; setPredicted(null); setVoted(null); } }, [q?.id]);
+  const opts = [["A", tr?.answer_a], ["B", tr?.answer_b], ["C", tr?.answer_c], ["D", tr?.answer_d]];
+  return (
+    <div className="p-5 animate-fade-up">
+      <p className="uppercase tracking-widest text-xs text-bronze mb-1">{state.current_player?.name}</p>
+      <h2 className="font-sans font-bold text-xl text-parchment leading-snug mb-4">{tr?.question}</h2>
+
+      {/* ¡Yo sí lo sé! prediction */}
+      <div className="glass rounded-2xl p-4 border-bronze/30 mb-4">
+        <p className="text-sand/80 text-sm mb-3">{t("willGetRight")}</p>
+        <div className="grid grid-cols-2 gap-3">
+          <button data-testid="predict-yes" disabled={predicted}
+            onClick={() => { setPredicted("yes"); send({ action: "predict", value: "yes" }); }}
+            className={`btn-tactile rounded-xl py-3 font-bold border ${predicted === "yes" ? "bg-correct text-white border-[#256b3d]" : "glass text-parchment border-bronze/40"}`}>
+            👍 {t("yesShort")}
+          </button>
+          <button data-testid="predict-no" disabled={predicted}
+            onClick={() => { setPredicted("no"); send({ action: "predict", value: "no" }); }}
+            className={`btn-tactile rounded-xl py-3 font-bold border ${predicted === "no" ? "bg-incorrect text-white border-[#8f2f26]" : "glass text-parchment border-bronze/40"}`}>
+            👎 {t("noShort")}
+          </button>
+        </div>
+        {predicted && <p className="text-gold text-xs mt-2 text-center">{t("predicted")}</p>}
+      </div>
+
+      {/* Consejo de exploradores voting */}
+      {cur.help_requested && (
+        <div className="glass rounded-2xl p-4 border-gold/40 mb-4">
+          <p className="text-gold text-sm mb-3">🧭 {t("councilVoted")}</p>
+          <div className="grid grid-cols-2 gap-2">
+            {opts.map(([L, text]) => (
+              <button key={L} data-testid={`vote-${L}`} disabled={voted}
+                onClick={() => { setVoted(L); send({ action: "vote", letter: L }); }}
+                className={`btn-tactile rounded-xl py-2 px-3 text-left border text-sm ${voted === L ? "bg-gold text-midnight border-[#a9822f]" : "glass text-parchment border-bronze/40"}`}>
+                <b>{L}.</b> {text}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <p className="text-sand/50 text-xs uppercase tracking-widest mb-2 text-center">{t("reactLabel")}</p>
+      <EmojiBar send={send} />
     </div>
   );
 }
@@ -508,11 +568,16 @@ function QuestionView({ cur, lang, t, send }) {
   const q = cur.question;
   const tr = q?.translations?.[lang] || q?.translations?.es;
   const [picked, setPicked] = useState(null);
-  useEffect(() => { setPicked(null); }, [q?.id]);
+  const pickedRef = useRef(false);
+  useEffect(() => { setPicked(null); pickedRef.current = false; }, [q?.id]);
+  const left = useCountdown(cur.time_left, q?.id, () => { if (!pickedRef.current) send({ action: "answer", answer: "TIMEOUT" }); });
+  const choose = (letter) => { setPicked(letter); pickedRef.current = true; send({ action: "answer", answer: letter }); };
   const opts = [["A", tr?.answer_a], ["B", tr?.answer_b], ["C", tr?.answer_c], ["D", tr?.answer_d]];
   const catIcon = cur.candidate ? loc(cur.candidate, lang) : null;
+  const votes = cur.votes || {};
   return (
     <div className="p-5 animate-fade-up">
+      {cur.time_left != null && <div className="mb-4"><TimerBar left={left} total={30} /></div>}
       {cur.candidate && (
         <div className="flex items-center gap-3 mb-4 glass rounded-xl p-2 border-bronze/30">
           <img src={cur.candidate.image} alt="" className="w-12 h-12 rounded-lg object-cover" />
@@ -527,16 +592,25 @@ function QuestionView({ cur, lang, t, send }) {
             key={letter}
             data-testid={`answer-${letter}`}
             disabled={picked}
-            onClick={() => { setPicked(letter); send({ action: "answer", answer: letter }); }}
+            onClick={() => choose(letter)}
             className={`btn-tactile rounded-2xl py-4 px-5 flex items-center gap-3 text-left border ${
               picked === letter ? "bg-gold text-midnight border-[#a9822f]" : "glass text-parchment border-bronze/40 hover:border-gold"
             }`}
           >
             <span className={`font-display font-bold w-8 h-8 flex items-center justify-center rounded-full shrink-0 ${picked === letter ? "bg-midnight text-gold" : "bg-bronze/20 text-gold"}`}>{letter}</span>
-            <span className="font-medium text-lg">{text}</span>
+            <span className="font-medium text-lg flex-1">{text}</span>
+            {cur.help_requested && votes[letter] > 0 && (
+              <span className="text-xs font-bold text-gold bg-midnight/40 rounded-full px-2 py-1">🧭 {votes[letter]}</span>
+            )}
           </button>
         ))}
       </div>
+      {!cur.help_requested && !picked && (
+        <button data-testid="ask-council-btn" onClick={() => send({ action: "request_help" })}
+          className="btn-tactile mt-5 w-full glass border-gold/40 text-gold rounded-2xl py-3 font-semibold hover:border-gold">
+          {t("askCouncil")}
+        </button>
+      )}
     </div>
   );
 }

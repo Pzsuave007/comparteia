@@ -85,6 +85,14 @@ async def broadcast(code):
                 await _send(c["ws"], {"type": "private", "private": priv})
 
 
+async def broadcast_reaction(code, name, emoji):
+    if not emoji or code not in CONNS:
+        return
+    payload = {"type": "reaction", "emoji": str(emoji)[:8], "name": name}
+    for c in list(CONNS[code]):
+        await _send(c["ws"], payload)
+
+
 @api_router.websocket("/ws/{code}")
 async def ws_endpoint(websocket: WebSocket, code: str):
     await websocket.accept()
@@ -162,6 +170,15 @@ async def handle_action(room, role, pid, msg):
         G.choose_location(room, CONTENT, pid, msg.get("location_id"))
     elif action == "answer":
         G.submit_answer(room, CONTENT, pid, msg.get("answer"))
+    elif action == "predict":
+        G.predict(room, CONTENT, pid, msg.get("value"))
+    elif action == "request_help":
+        G.request_help(room, CONTENT, pid)
+    elif action == "vote":
+        G.vote_help(room, CONTENT, pid, msg.get("letter"))
+    elif action == "emoji":
+        name = room["players"].get(pid, {}).get("name", "?")
+        await broadcast_reaction(room["code"], name, msg.get("emoji"))
     elif action == "pass":
         G.pass_turn(room, CONTENT, pid)
     elif action == "claim_win":

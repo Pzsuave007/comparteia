@@ -14,6 +14,7 @@ function wsUrl(code, role, pid) {
 export function useRoom(code, role, pid) {
   const [state, setState] = useState(null);
   const [priv, setPriv] = useState(null);
+  const [reaction, setReaction] = useState(null);
   const [connected, setConnected] = useState(false);
   const wsRef = useRef(null);
   const retryRef = useRef(null);
@@ -28,6 +29,7 @@ export function useRoom(code, role, pid) {
         const msg = JSON.parse(e.data);
         if (msg.type === "state") setState(msg.state);
         else if (msg.type === "private") setPriv(msg.private);
+        else if (msg.type === "reaction") setReaction({ emoji: msg.emoji, name: msg.name, id: Date.now() + Math.random() });
         else if (msg.type === "error") setState({ error: msg.message });
       } catch (_) {}
     };
@@ -51,7 +53,7 @@ export function useRoom(code, role, pid) {
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(payload));
   }, []);
 
-  return { state, priv, connected, send };
+  return { state, priv, connected, send, reaction };
 }
 
 export { BACKEND };

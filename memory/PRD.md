@@ -38,6 +38,7 @@ secret server-side verification, dramatic winner reveal. Bilingual (ES/EN) PER P
 - ✅ 3 ranks + rank-adapted question selection w/ fallback; bilingual content (ES/EN).
 - ✅ Sound design (Web Audio synth) w/ host mute; host controls (sound/skip/restart).
 - ✅ Admin panel CRUD for characters/locations/events/questions.
+- ✅ Live interactions (2026-06): emoji reactions floating on TV; "¡Yo sí lo sé!" predictions with TV reveal; "Consejo de exploradores" council voting (A/B/C/D) shown on TV + active phone; expedition sand-timer (30s, auto-timeout ends turn); honor scoreboard (correct answers) on winner screen.
 - ✅ Seed: 10 characters, 10 locations, 10 events (AI illustrations), 41 bilingual questions.
 - ✅ Engine validated via deterministic tests (all dice branches, win, security/privacy, clues).
 

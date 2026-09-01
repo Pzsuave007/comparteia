@@ -5,8 +5,10 @@ player's private notebook. Public state never leaks secrets or private data.
 """
 import random
 import string
+import time
 
 CATEGORIES = ["character", "location", "event"]
+QUESTION_SECONDS = 30
 
 # --------------------------------------------------------------------------
 # Content store (loaded from Mongo at game start)
@@ -107,7 +109,7 @@ def add_player(room, name, language="es", rank="explorer"):
     pid = "p_" + "".join(random.choices(string.ascii_lowercase + string.digits, k=8))
     room["players"][pid] = {
         "id": pid, "name": name, "language": language, "rank": rank,
-        "connected": True, "ready": True,
+        "connected": True, "ready": True, "honor": 0,
     }
     room["private"][pid] = new_private()
     if room["status"] == "playing" and pid not in room["order"]:
@@ -133,6 +135,7 @@ def start_game(room, content):
     room["winner_id"] = None
     for pid in ids:
         room["private"][pid] = new_private()
+        room["players"][pid]["honor"] = 0
     # build pools (8-10 per category) + secrets
     room["pools"] = {}
     room["secret"] = {}
@@ -172,8 +175,35 @@ def _start_question(room, content, category, entity_id, purpose):
                      "translations": q["translations"]},
         "correct_answer": q["correct_answer"],
         "bible_reference": q["bible_reference"],
+        "predictions": {},                 # pid -> 'yes'/'no'  (¡Yo sí lo sé!)
+        "help_requested": False,           # Consejo de exploradores
+        "votes": {},                       # pid -> 'A'/'B'/'C'/'D'
+        "deadline": time.time() + QUESTION_SECONDS,
     })
     room["phase"] = "question"
+
+
+def predict(room, content, pid, value):
+    """Non-active player bets whether the active player will answer correctly."""
+    if room["phase"] != "question" or pid == current_player_id(room):
+        return
+    if value in ("yes", "no"):
+        room["current"].setdefault("predictions", {})[pid] = value
+
+
+def request_help(room, content, pid):
+    if room["phase"] == "question" and pid == current_player_id(room):
+        room["current"]["help_requested"] = True
+
+
+def vote_help(room, content, pid, letter):
+    """Non-active players vote a suggested answer for the council."""
+    if room["phase"] != "question" or pid == current_player_id(room):
+        return
+    if not room["current"].get("help_requested"):
+        return
+    if letter in ("A", "B", "C", "D"):
+        room["current"].setdefault("votes", {})[pid] = letter
 
 
 def continue_turn(room, content, pid):
@@ -241,6 +271,7 @@ def submit_answer(room, content, pid, answer):
     priv = room["private"][pid]
     result = {"type": None}
     if correct:
+        room["players"][pid]["honor"] = room["players"][pid].get("honor", 0) + 1
         if cur["phase_purpose"] == "clue":
             clue = _grant_clue(room, content, priv)
             result = {"type": "clue", "clue": clue, "granted": clue is not None}
@@ -357,6 +388,11 @@ def public_current(room, content):
         out["candidate"] = content.public_entity(cur["category"], cur["candidate_id"])
     if "question" in cur and phase in ("question", "feedback"):
         out["question"] = cur["question"]
+    if phase == "question":
+        if cur.get("deadline"):
+            out["time_left"] = max(0, round(cur["deadline"] - time.time()))
+        out["help_requested"] = cur.get("help_requested", False)
+        out["votes"] = _tally_votes(cur.get("votes", {}))
     if phase == "feedback":
         out["was_correct"] = cur.get("was_correct")
         out["correct_answer"] = cur.get("correct_answer")
@@ -365,7 +401,20 @@ def public_current(room, content):
         # only public-safe part of the private result
         pr = cur.get("private_result", {})
         out["result_type"] = pr.get("type")
+        preds = cur.get("predictions", {})
+        out["predictions"] = {"yes": sum(1 for v in preds.values() if v == "yes"),
+                              "no": sum(1 for v in preds.values() if v == "no")}
+        out["votes"] = _tally_votes(cur.get("votes", {}))
+        out["help_requested"] = cur.get("help_requested", False)
     return out
+
+
+def _tally_votes(votes):
+    t = {"A": 0, "B": 0, "C": 0, "D": 0}
+    for v in votes.values():
+        if v in t:
+            t[v] += 1
+    return t
 
 
 def public_state(room, content):
@@ -375,7 +424,8 @@ def public_state(room, content):
         if not p:
             continue
         players.append({"id": p["id"], "name": p["name"], "rank": p["rank"],
-                        "language": p["language"], "connected": p["connected"]})
+                        "language": p["language"], "connected": p["connected"],
+                        "honor": p.get("honor", 0)})
     cpid = current_player_id(room) if room["status"] == "playing" else None
     cur_player = room["players"].get(cpid) if cpid else None
     state = {

@@ -10,6 +10,7 @@ import { useRoom, BACKEND } from "@/useRoom";
 import Dice from "@/components/Dice";
 import { play } from "@/sounds";
 import { QRCodeSVG } from "qrcode.react";
+import { ReactionOverlay, TimerBar, useCountdown } from "@/components/interactions";
 
 const API = `${BACKEND}/api`;
 const RUINS = "https://images.unsplash.com/photo-1565799446045-5ba401561908";
@@ -82,7 +83,7 @@ function CreateRoom({ onCreated }) {
 
 /* ------------------------------ HOST SCREEN ------------------------------ */
 function HostScreen({ code }) {
-  const { state, send } = useRoom(code, "host");
+  const { state, send, reaction } = useRoom(code, "host");
   const prevPhase = useRef(null);
 
   useEffect(() => {
@@ -107,6 +108,7 @@ function HostScreen({ code }) {
       {state.status === "playing" && <GameStage state={state} hostLang={hostLang} />}
       {state.status === "finished" && <WinnerReveal state={state} send={send} />}
       {state.status !== "lobby" && <ControlBar state={state} send={send} />}
+      <ReactionOverlay reaction={reaction} />
     </div>
   );
 }
@@ -280,8 +282,13 @@ function QuestionStage({ cur, state, hostLang, pLang }) {
   const otherLang = pLang === "es" ? "en" : "es";
   const secondary = state.show_translation ? q?.translations?.[otherLang] : null;
   const letters = ["A", "B", "C", "D"];
+  const votes = cur.votes || {};
+  const left = useCountdown(cur.time_left, q?.id);
   return (
     <div className="min-h-screen flex flex-col justify-center px-10 lg:px-24 py-24 max-w-6xl mx-auto animate-fade-up">
+      {cur.time_left != null && (
+        <div className="max-w-md mb-8"><TimerBar left={left} total={30} big /></div>
+      )}
       {cur.candidate && (
         <div className="flex items-center gap-4 mb-6">
           <img src={cur.candidate.image} alt="" className="w-16 h-16 rounded-xl object-cover border border-bronze/40" />
@@ -294,13 +301,19 @@ function QuestionStage({ cur, state, hostLang, pLang }) {
         {letters.map((L) => (
           <div key={L} className="glass rounded-2xl px-6 py-5 border-bronze/30 flex items-center gap-4">
             <span className="font-display font-bold text-2xl w-12 h-12 flex items-center justify-center rounded-full bg-bronze/20 text-gold shrink-0">{L}</span>
-            <div>
+            <div className="flex-1">
               <span className="text-parchment text-2xl font-medium">{primary?.["answer_" + L.toLowerCase()]}</span>
               {secondary && <span className="block text-sand/50 italic text-lg">{secondary["answer_" + L.toLowerCase()]}</span>}
             </div>
+            {cur.help_requested && votes[L] > 0 && (
+              <span className="font-display font-bold text-gold bg-midnight/50 rounded-full px-3 py-1 text-lg shrink-0">🧭 {votes[L]}</span>
+            )}
           </div>
         ))}
       </div>
+      {cur.help_requested && (
+        <p className="text-gold text-center mt-6 font-serif text-xl animate-fade-in">🧭 {bi(hostLang, "El consejo está votando…", "The council is voting…")}</p>
+      )}
     </div>
   );
 }
@@ -328,6 +341,14 @@ function FeedbackStage({ cur, state, hostLang, pLang }) {
       )}
       {correct && cur.phase_purpose === "clue" && (
         <p className="mt-8 font-display text-4xl text-gold animate-fade-up">🔐 {bi(hostLang, "PISTA DESBLOQUEADA", "CLUE UNLOCKED")}</p>
+      )}
+      {cur.predictions && (cur.predictions.yes + cur.predictions.no) > 0 && (
+        <div className="mt-8 animate-fade-up glass rounded-2xl px-8 py-4 border-bronze/30">
+          <p className="text-2xl text-parchment">
+            <span className="text-gold font-display text-3xl">{correct ? cur.predictions.yes : cur.predictions.no}</span>{" "}
+            {bi(hostLang, correct ? "creyeron que acertaría" : "dudaron", correct ? "believed" : "doubted")}
+          </p>
+        </div>
       )}
     </div>
   );
@@ -401,6 +422,7 @@ function WinnerReveal({ state, send }) {
             <div className="text-8xl mb-4">🏆</div>
             <h1 className="font-display font-800 text-5xl lg:text-6xl text-gold text-shadow-lg">{bi(hostLang, "¡ARCHIVO BÍBLICO RECUPERADO!", "BIBLE ARCHIVE RECOVERED!")}</h1>
             <p className="font-serif text-4xl text-parchment mt-6">🏆 {state.winner?.name} {bi(hostLang, "gana la expedición", "wins the expedition")}</p>
+            <HonorBoard state={state} hostLang={hostLang} />
             <button data-testid="tv-newgame-btn" onClick={() => { setStep(0); send({ action: "newgame" }); }}
               className="btn-tactile mt-10 bg-gold text-midnight border-[#a9822f] font-black text-2xl rounded-2xl px-12 py-5 hover:bg-bronze">
               {tt("es", "newExpedition")}
@@ -408,6 +430,27 @@ function WinnerReveal({ state, send }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function HonorBoard({ state, hostLang }) {
+  const ranked = [...(state.players || [])].sort((a, b) => (b.honor || 0) - (a.honor || 0));
+  const medals = ["🥇", "🥈", "🥉"];
+  return (
+    <div className="mt-10 max-w-md mx-auto glass rounded-2xl p-6 border-bronze/40" data-testid="honor-board">
+      <p className="uppercase tracking-[0.2em] text-sand/70 text-sm mb-4">📜 {bi(hostLang, "Marcador de honor", "Honor scoreboard")}</p>
+      <div className="space-y-2">
+        {ranked.map((p, i) => (
+          <div key={p.id} className="flex items-center justify-between bg-midnight2/60 rounded-xl px-4 py-2 border border-bronze/20">
+            <span className="flex items-center gap-2 text-parchment font-serif text-lg">
+              <span className="w-6">{medals[i] || `${i + 1}.`}</span> {p.name}
+            </span>
+            <span className="font-display font-bold text-gold text-xl">{p.honor || 0}</span>
+          </div>
+        ))}
+      </div>
+      <p className="text-sand/50 text-xs mt-3">{bi(hostLang, "Respuestas correctas", "Correct answers")}</p>
     </div>
   );
 }
