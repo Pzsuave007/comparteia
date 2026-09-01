@@ -1,7 +1,9 @@
-"""In-memory game engine + state machine for ARCHIVO BÍBLICO PERDIDO.
+"""In-memory board-game engine for ARCHIVO BÍBLICO PERDIDO.
 
-The server is authoritative: it holds the three secret pieces and every
-player's private notebook. Public state never leaks secrets or private data.
+Shared map: players move a pawn with the die. Tiles trigger investigations
+(character/location/event), traps (answer to pass or move back), clues, or rest.
+Recovering the 3 secret pieces opens the secret path to the Temple; first pawn
+to reach the Temple wins. Server is authoritative; secrets stay private.
 """
 import random
 import string
@@ -9,6 +11,12 @@ import time
 
 CATEGORIES = ["character", "location", "event"]
 QUESTION_SECONDS = 30
+
+EXPLORE_END = 24     # exploration loop tiles 1..24
+SECRET_START = 25    # secret path tiles 25..29
+TEMPLE = 30          # temple tile index (win)
+BACK_STEPS = 3       # trap penalty
+
 
 # --------------------------------------------------------------------------
 # Content store (loaded from Mongo at game start)
@@ -36,7 +44,6 @@ class Content:
         q = self.questions
         def f(pred):
             return [x for x in q if pred(x) and x["id"] not in seen]
-        tiers = []
         if category == "general" or entity_id is None:
             tiers = [f(lambda x: x["category"] == "general" and x["rank"] == rank),
                      f(lambda x: x["category"] == "general"),
@@ -52,14 +59,10 @@ class Content:
         for t in tiers:
             if t:
                 return random.choice(t)
-        # everything seen -> allow repeats
         pool = [x for x in q if x["related_entity_id"] == entity_id] or q
         return random.choice(pool)
 
 
-# --------------------------------------------------------------------------
-# Rooms (in memory)
-# --------------------------------------------------------------------------
 ROOMS = {}
 
 
@@ -75,8 +78,8 @@ def new_private():
         "discovered": {c: False for c in CATEGORIES},
         "recovered_ids": {c: None for c in CATEGORIES},
         "discarded": {c: [] for c in CATEGORIES},
-        "clues": [],           # list of {category, es, en}
-        "clue_keys": [],       # dedupe keys
+        "clues": [],
+        "clue_keys": [],
         "seen_questions": [],
         "can_win": False,
     }
@@ -85,21 +88,12 @@ def new_private():
 def create_room(host_language="bilingual", show_translation=True):
     code = gen_code()
     room = {
-        "code": code,
-        "status": "lobby",              # lobby / playing / finished
-        "host_language": host_language, # es / en / bilingual
-        "show_translation": show_translation,
-        "sound": True,
-        "paused": False,
-        "players": {},                  # id -> player
-        "order": [],                    # player ids in turn order
-        "turn_index": 0,
-        "phase": "lobby",
-        "current": {},                  # action data for current turn
-        "secret": {},                   # SERVER ONLY
-        "pools": {},                    # category -> [entity ids]
-        "private": {},                  # player id -> private state
-        "winner_id": None,
+        "code": code, "status": "lobby",
+        "host_language": host_language, "show_translation": show_translation,
+        "sound": True, "paused": False,
+        "players": {}, "order": [], "turn_index": 0,
+        "phase": "lobby", "current": {}, "secret": {}, "pools": {},
+        "private": {}, "winner_id": None, "board": [],
     }
     ROOMS[code] = room
     return room
@@ -109,7 +103,7 @@ def add_player(room, name, language="es", rank="explorer"):
     pid = "p_" + "".join(random.choices(string.ascii_lowercase + string.digits, k=8))
     room["players"][pid] = {
         "id": pid, "name": name, "language": language, "rank": rank,
-        "connected": True, "ready": True, "honor": 0,
+        "connected": True, "ready": True, "honor": 0, "streak": 0, "pos": 0,
     }
     room["private"][pid] = new_private()
     if room["status"] == "playing" and pid not in room["order"]:
@@ -123,8 +117,30 @@ def current_player_id(room):
     return room["order"][room["turn_index"] % len(room["order"])]
 
 
+def _gen_board():
+    types = (["character"] * 5 + ["location"] * 5 + ["event"] * 5 + ["trap"] * 4 + ["clue"] * 4)
+    random.shuffle(types)
+    board = [{"type": "start"}] + [{"type": t} for t in types]     # 0 .. 23
+    while len(board) <= EXPLORE_END:
+        board.append({"type": "rest"})
+    board = board[:EXPLORE_END + 1]
+    board += [{"type": "path"} for _ in range(SECRET_START, TEMPLE)]  # 25..29
+    board.append({"type": "temple"})                                  # 30
+    return board
+
+
+def has_three(room, pid):
+    return all(room["private"][pid]["discovered"].values())
+
+
+def _move(pos, steps, has3):
+    if has3:
+        return min(pos + steps, TEMPLE)
+    return ((pos - 1 + steps) % EXPLORE_END) + 1
+
+
 # --------------------------------------------------------------------------
-# Game lifecycle
+# Lifecycle
 # --------------------------------------------------------------------------
 def start_game(room, content):
     ids = list(room["players"].keys())
@@ -133,10 +149,12 @@ def start_game(room, content):
     room["turn_index"] = 0
     room["status"] = "playing"
     room["winner_id"] = None
+    room["board"] = _gen_board()
     for pid in ids:
         room["private"][pid] = new_private()
         room["players"][pid]["honor"] = 0
-    # build pools (8-10 per category) + secrets
+        room["players"][pid]["streak"] = 0
+        room["players"][pid]["pos"] = 0
     room["pools"] = {}
     room["secret"] = {}
     for c in CATEGORIES:
@@ -158,8 +176,12 @@ def roll_dice(room, content, pid):
     if room["phase"] != "roll" or pid != current_player_id(room):
         return
     value = random.randint(1, 6)
-    room["current"] = {"dice_value": value}
-    room["phase"] = "dice"
+    p = room["players"][pid]
+    frm = p["pos"]
+    to = _move(frm, value, has_three(room, pid))
+    room["current"] = {"dice_value": value, "from": frm, "to": to,
+                       "tile": room["board"][to]["type"]}
+    room["phase"] = "moving"
 
 
 def _start_question(room, content, category, entity_id, purpose):
@@ -168,82 +190,41 @@ def _start_question(room, content, category, entity_id, purpose):
     q = content.pick_question(category, entity_id, player["rank"], priv["seen_questions"])
     priv["seen_questions"].append(q["id"])
     room["current"].update({
-        "phase_purpose": purpose,          # 'clue' or 'verify'
-        "category": category,
-        "candidate_id": entity_id,
-        "question": {"id": q["id"], "category": q["category"],
-                     "translations": q["translations"]},
-        "correct_answer": q["correct_answer"],
-        "bible_reference": q["bible_reference"],
-        "predictions": {},                 # pid -> 'yes'/'no'  (¡Yo sí lo sé!)
-        "help_requested": False,           # Consejo de exploradores
-        "votes": {},                       # pid -> 'A'/'B'/'C'/'D'
+        "phase_purpose": purpose, "category": category, "candidate_id": entity_id,
+        "question": {"id": q["id"], "category": q["category"], "translations": q["translations"]},
+        "correct_answer": q["correct_answer"], "bible_reference": q["bible_reference"],
+        "predictions": {}, "help_requested": False, "votes": {},
         "deadline": time.time() + QUESTION_SECONDS,
     })
     room["phase"] = "question"
 
 
-def predict(room, content, pid, value):
-    """Non-active player bets whether the active player will answer correctly."""
-    if room["phase"] != "question" or pid == current_player_id(room):
-        return
-    if value in ("yes", "no"):
-        room["current"].setdefault("predictions", {})[pid] = value
-
-
-def request_help(room, content, pid):
-    if room["phase"] == "question" and pid == current_player_id(room):
-        room["current"]["help_requested"] = True
-
-
-def vote_help(room, content, pid, letter):
-    """Non-active players vote a suggested answer for the council."""
-    if room["phase"] != "question" or pid == current_player_id(room):
-        return
-    if not room["current"].get("help_requested"):
-        return
-    if letter in ("A", "B", "C", "D"):
-        room["current"].setdefault("votes", {})[pid] = letter
-
-
 def continue_turn(room, content, pid):
-    """Advance transient phases driven by the active player pressing Continue."""
     if pid != current_player_id(room):
         return
     phase = room["phase"]
-    if phase == "dice":
-        v = room["current"]["dice_value"]
-        if v == 1:
-            _start_question(room, content, "general", None, "clue")
-        elif v == 2:
-            room["current"]["category"] = "character"
+    p = room["players"][pid]
+    if phase == "moving":
+        to = room["current"]["to"]
+        p["pos"] = to
+        tile = room["board"][to]["type"]
+        if tile == "temple":
+            room["status"] = "finished"
+            room["winner_id"] = pid
+            room["phase"] = "winner"
+        elif tile in CATEGORIES:
+            room["current"]["category"] = tile
             room["phase"] = "choose_candidate"
-        elif v == 3:
-            room["phase"] = "choose_category"
-        elif v == 4:
-            room["phase"] = "choose_location"
-        elif v == 5:
-            room["current"]["setback"] = random.choice(
-                ["sandstorm", "caravan", "lostmap", "blocked", "scroll"])
-            room["phase"] = "setback"
-        elif v == 6:
-            room["current"]["category"] = "event"
-            room["phase"] = "choose_candidate"
-    elif phase == "travel":
-        _start_question(room, content, "location", room["current"]["candidate_id"], "verify")
-    elif phase in ("feedback", "setback"):
+        elif tile == "trap":
+            _start_question(room, content, "general", None, "trap")
+        elif tile == "clue":
+            clue = _grant_clue(room, content, room["private"][pid])
+            room["current"]["private_result"] = {"type": "clue", "clue": clue, "granted": clue is not None}
+            room["phase"] = "clue_tile"
+        else:  # rest / path / start
+            room["phase"] = "rest_tile"
+    elif phase in ("feedback", "clue_tile", "rest_tile"):
         _advance_player(room)
-
-
-def choose_category(room, content, pid, category):
-    if room["phase"] != "choose_category" or pid != current_player_id(room):
-        return
-    if category == "location":
-        room["current"]["category"] = "location"
-        room["phase"] = "choose_location"
-    elif category in ("character", "event"):
-        room["current"]["category"] = category
-        room["phase"] = "choose_candidate"
 
 
 def choose_candidate(room, content, pid, candidate_id):
@@ -253,14 +234,6 @@ def choose_candidate(room, content, pid, candidate_id):
     _start_question(room, content, category, candidate_id, "verify")
 
 
-def choose_location(room, content, pid, location_id):
-    if room["phase"] != "choose_location" or pid != current_player_id(room):
-        return
-    room["current"]["category"] = "location"
-    room["current"]["candidate_id"] = location_id
-    room["phase"] = "travel"
-
-
 def submit_answer(room, content, pid, answer):
     if room["phase"] != "question" or pid != current_player_id(room):
         return
@@ -268,27 +241,39 @@ def submit_answer(room, content, pid, answer):
     correct = (answer == cur["correct_answer"])
     cur["answer_given"] = answer
     cur["was_correct"] = correct
+    p = room["players"][pid]
     priv = room["private"][pid]
-    result = {"type": None}
     if correct:
-        room["players"][pid]["honor"] = room["players"][pid].get("honor", 0) + 1
-        if cur["phase_purpose"] == "clue":
-            clue = _grant_clue(room, content, priv)
-            result = {"type": "clue", "clue": clue, "granted": clue is not None}
-        else:  # verify
-            category = cur["category"]
-            eid = cur["candidate_id"]
-            is_secret = (room["secret"].get(category) == eid)
-            if is_secret:
-                priv["discovered"][category] = True
-                priv["recovered_ids"][category] = eid
-                result = {"type": "verify", "recovered": True, "category": category, "entity_id": eid}
-                if all(priv["discovered"].values()):
-                    priv["can_win"] = True
-            else:
-                if eid not in priv["discarded"][category]:
-                    priv["discarded"][category].append(eid)
-                result = {"type": "verify", "recovered": False, "category": category, "entity_id": eid}
+        p["streak"] = p.get("streak", 0) + 1
+        cur["streak"] = p["streak"]
+        cur["honor_gain"] = p["streak"]
+        p["honor"] = p.get("honor", 0) + p["streak"]
+    else:
+        p["streak"] = 0
+        cur["streak"] = 0
+        cur["honor_gain"] = 0
+    result = {"type": None}
+    purpose = cur["phase_purpose"]
+    if purpose == "verify" and correct:
+        category = cur["category"]
+        eid = cur["candidate_id"]
+        if room["secret"].get(category) == eid:
+            priv["discovered"][category] = True
+            priv["recovered_ids"][category] = eid
+            result = {"type": "verify", "recovered": True, "category": category, "entity_id": eid}
+            if all(priv["discovered"].values()):
+                priv["can_win"] = True
+        else:
+            if eid not in priv["discarded"][category]:
+                priv["discarded"][category].append(eid)
+            result = {"type": "verify", "recovered": False, "category": category, "entity_id": eid}
+    elif purpose == "trap":
+        if correct:
+            result = {"type": "trap", "passed": True}
+        else:
+            newpos = max(1, p["pos"] - BACK_STEPS)
+            p["pos"] = newpos
+            result = {"type": "trap", "passed": False, "back": BACK_STEPS, "new_pos": newpos}
     cur["private_result"] = result
     room["phase"] = "feedback"
 
@@ -325,21 +310,35 @@ def _advance_player(room):
 
 
 def pass_turn(room, content, pid):
-    """Let the active player bail out of a selection phase so they are never stuck
-    (e.g. every candidate in a category is already discarded/recovered)."""
     if pid != current_player_id(room):
         return
-    if room["phase"] in ("dice", "choose_category", "choose_candidate", "choose_location", "travel"):
+    if room["phase"] in ("moving", "choose_candidate", "clue_tile", "rest_tile"):
         _advance_player(room)
 
 
-def claim_win(room, content, pid):
-    priv = room["private"].get(pid)
-    if not priv or not priv["can_win"]:
+def predict(room, content, pid, value):
+    if room["phase"] != "question" or pid == current_player_id(room):
         return
-    room["status"] = "finished"
-    room["winner_id"] = pid
-    room["phase"] = "winner"
+    if value in ("yes", "no"):
+        room["current"].setdefault("predictions", {})[pid] = value
+
+
+def request_help(room, content, pid):
+    if room["phase"] == "question" and pid == current_player_id(room):
+        room["current"]["help_requested"] = True
+
+
+def vote_help(room, content, pid, letter):
+    if room["phase"] != "question" or pid == current_player_id(room):
+        return
+    if not room["current"].get("help_requested"):
+        return
+    if letter in ("A", "B", "C", "D"):
+        room["current"].setdefault("votes", {})[pid] = letter
+
+
+def claim_win(room, content, pid):
+    return  # winning now happens by reaching the Temple on the board
 
 
 # --------------------------------------------------------------------------
@@ -373,18 +372,26 @@ def set_sound(room, on):
 # --------------------------------------------------------------------------
 # Serialization
 # --------------------------------------------------------------------------
+def _tally_votes(votes):
+    t = {"A": 0, "B": 0, "C": 0, "D": 0}
+    for v in votes.values():
+        if v in t:
+            t[v] += 1
+    return t
+
+
 def public_current(room, content):
-    """Public view of the current action (no correct answer, no secret)."""
     cur = room.get("current", {})
     phase = room["phase"]
     out = {}
     if "dice_value" in cur:
         out["dice_value"] = cur["dice_value"]
-    if "setback" in cur:
-        out["setback"] = cur["setback"]
+    for k in ("from", "to", "tile"):
+        if k in cur:
+            out[k] = cur[k]
     if cur.get("category"):
         out["category"] = cur["category"]
-    if cur.get("candidate_id") and cur["category"] in CATEGORIES:
+    if cur.get("candidate_id") and cur.get("category") in CATEGORIES:
         out["candidate"] = content.public_entity(cur["category"], cur["candidate_id"])
     if "question" in cur and phase in ("question", "feedback"):
         out["question"] = cur["question"]
@@ -398,23 +405,21 @@ def public_current(room, content):
         out["correct_answer"] = cur.get("correct_answer")
         out["bible_reference"] = cur.get("bible_reference")
         out["phase_purpose"] = cur.get("phase_purpose")
-        # only public-safe part of the private result
         pr = cur.get("private_result", {})
         out["result_type"] = pr.get("type")
+        if pr.get("type") == "trap":
+            out["trap_passed"] = pr.get("passed")
+            out["trap_back"] = pr.get("back")
+        out["streak"] = cur.get("streak", 0)
+        out["honor_gain"] = cur.get("honor_gain", 0)
         preds = cur.get("predictions", {})
         out["predictions"] = {"yes": sum(1 for v in preds.values() if v == "yes"),
                               "no": sum(1 for v in preds.values() if v == "no")}
         out["votes"] = _tally_votes(cur.get("votes", {}))
         out["help_requested"] = cur.get("help_requested", False)
+    if phase in ("clue_tile",):
+        out["result_type"] = "clue"
     return out
-
-
-def _tally_votes(votes):
-    t = {"A": 0, "B": 0, "C": 0, "D": 0}
-    for v in votes.values():
-        if v in t:
-            t[v] += 1
-    return t
 
 
 def public_state(room, content):
@@ -425,18 +430,21 @@ def public_state(room, content):
             continue
         players.append({"id": p["id"], "name": p["name"], "rank": p["rank"],
                         "language": p["language"], "connected": p["connected"],
-                        "honor": p.get("honor", 0)})
+                        "honor": p.get("honor", 0), "pos": p.get("pos", 0)})
     cpid = current_player_id(room) if room["status"] == "playing" else None
     cur_player = room["players"].get(cpid) if cpid else None
+    max_progress = 0
+    if room["status"] == "playing":
+        for pv in room["private"].values():
+            max_progress = max(max_progress, sum(1 for v in pv["discovered"].values() if v))
     state = {
-        "code": room["code"],
-        "status": room["status"],
-        "host_language": room["host_language"],
-        "show_translation": room["show_translation"],
-        "sound": room["sound"],
-        "paused": room["paused"],
-        "phase": room["phase"],
-        "players": players,
+        "code": room["code"], "status": room["status"],
+        "host_language": room["host_language"], "show_translation": room["show_translation"],
+        "sound": room["sound"], "paused": room["paused"], "phase": room["phase"],
+        "players": players, "max_progress": max_progress,
+        "secret_open": max_progress >= 3,
+        "board": [t["type"] for t in room["board"]],
+        "temple_index": TEMPLE, "explore_end": EXPLORE_END,
         "current_player": ({"id": cur_player["id"], "name": cur_player["name"],
                             "rank": cur_player["rank"], "language": cur_player["language"]}
                            if cur_player else None),
@@ -463,7 +471,6 @@ def private_state(room, pid):
         "clues": priv["clues"],
         "can_win": priv["can_win"],
         "is_current": current_player_id(room) == pid,
-        # private result for the active player only (contains verify outcome / clue)
         "last_result": (room["current"].get("private_result")
-                        if current_player_id(room) == pid and room["phase"] == "feedback" else None),
+                        if current_player_id(room) == pid and room["phase"] in ("feedback", "clue_tile") else None),
     }

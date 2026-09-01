@@ -39,6 +39,7 @@ secret server-side verification, dramatic winner reveal. Bilingual (ES/EN) PER P
 - ✅ Sound design (Web Audio synth) w/ host mute; host controls (sound/skip/restart).
 - ✅ Admin panel CRUD for characters/locations/events/questions.
 - ✅ Live interactions (2026-06): emoji reactions floating on TV; "¡Yo sí lo sé!" predictions with TV reveal; "Consejo de exploradores" council voting (A/B/C/D) shown on TV + active phone; expedition sand-timer (30s, auto-timeout ends turn); honor scoreboard (correct answers) on winner screen.
+- ✅ Board game mode (2026-06): dice now MOVES a pawn on a shared map (24 exploration tiles + secret path + Temple). Tile types: character/location/event (choose candidate → verify), trap (answer to pass; wrong = move back 3), clue (free private clue), rest. Recovering all 3 pieces opens the secret path (anonymous vault 3/3); first pawn to reach the Temple wins → race. TV shows the live board with pawns; ambient music, sparkles, streak multiplier and vault preserved.
 - ✅ Seed: 10 characters, 10 locations, 10 events (AI illustrations), 41 bilingual questions.
 - ✅ Engine validated via deterministic tests (all dice branches, win, security/privacy, clues).
 

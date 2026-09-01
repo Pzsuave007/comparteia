@@ -55,3 +55,42 @@ export function play(name, enabled = true) {
   if (!enabled) return;
   try { (SOUNDS[name] || (() => {}))(); } catch (e) {}
 }
+
+// ---- Ambient adventure music (synthesized, no copyrighted assets) ----
+let ambient = null;
+export function startAmbient(enabled = true) {
+  if (!enabled || ambient) return;
+  const a = ac();
+  if (!a) return;
+  const master = a.createGain();
+  master.gain.value = 0.0;
+  master.gain.linearRampToValueAtTime(0.05, a.currentTime + 3);
+  master.connect(a.destination);
+  const freqs = [146.83, 220.0, 293.66];
+  const oscs = freqs.map((f, i) => {
+    const o = a.createOscillator();
+    o.type = i === 0 ? "sine" : "triangle";
+    o.frequency.value = f;
+    const g = a.createGain();
+    g.gain.value = i === 0 ? 0.5 : 0.22;
+    const lfo = a.createOscillator();
+    lfo.frequency.value = 0.05 + i * 0.03;
+    const lg = a.createGain();
+    lg.gain.value = 2.5;
+    lfo.connect(lg).connect(o.frequency);
+    o.connect(g).connect(master);
+    o.start(); lfo.start();
+    return [o, lfo];
+  });
+  ambient = { master, oscs };
+}
+export function stopAmbient() {
+  if (!ambient) return;
+  const a = ac();
+  try {
+    ambient.master.gain.linearRampToValueAtTime(0.0001, a.currentTime + 1.2);
+    const cur = ambient;
+    ambient = null;
+    setTimeout(() => cur.oscs.forEach(([o, l]) => { try { o.stop(); l.stop(); } catch (e) {} }), 1400);
+  } catch (e) { ambient = null; }
+}

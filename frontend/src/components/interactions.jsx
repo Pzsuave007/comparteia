@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 export const EMOJIS = ["🔥", "😲", "🐪", "👏", "🙌", "🤔", "😂", "⚡"];
 
@@ -75,6 +75,49 @@ export function ReactionOverlay({ reaction }) {
         </div>
       ))}
       <style>{`@keyframes floatUp{0%{transform:translateY(0) scale(0.6);opacity:0}15%{opacity:1;transform:translateY(-20px) scale(1.1)}100%{transform:translateY(-60vh) scale(1);opacity:0}}`}</style>
+    </div>
+  );
+}
+
+// Radial sparkle burst (mount to trigger). Place inside a relative container.
+export function SparkleBurst({ count = 26, colors = ["#E5C05C", "#C89B3C", "#FDFBF7"] }) {
+  const bits = useMemo(() => Array.from({ length: count }).map((_, i) => ({
+    id: i, a: Math.random() * 360, d: 70 + Math.random() * 220, s: 5 + Math.random() * 9,
+    delay: Math.random() * 0.15, color: colors[i % colors.length],
+  })), [count]);
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-visible flex items-center justify-center z-30">
+      {bits.map((b) => {
+        const rad = (b.a * Math.PI) / 180;
+        return (
+          <span key={b.id} style={{
+            position: "absolute", width: b.s, height: b.s, borderRadius: "50%", background: b.color,
+            "--tx": `${Math.cos(rad) * b.d}px`, "--ty": `${Math.sin(rad) * b.d}px`,
+            animation: `sparkle 0.95s cubic-bezier(0.2,0.7,0.3,1) ${b.delay}s forwards`,
+          }} />
+        );
+      })}
+      <style>{`@keyframes sparkle{0%{transform:translate(0,0) scale(1);opacity:1}100%{transform:translate(var(--tx),var(--ty)) scale(0);opacity:0}}`}</style>
+    </div>
+  );
+}
+
+// Anonymous "Archive Vault": 3 slots that glow with the leader's progress (no name).
+export function ArchiveVault({ progress = 0, pulse = false, hostLang = "bilingual" }) {
+  const label = hostLang === "en" ? "Someone has" : hostLang === "es" ? "Alguien tiene" : "Alguien / Someone";
+  return (
+    <div data-testid="archive-vault" className="glass rounded-2xl px-4 py-3 border-bronze/40 flex flex-col items-center gap-2">
+      <div className="flex items-center gap-2">
+        {[0, 1, 2].map((i) => {
+          const filled = i < progress;
+          return (
+            <div key={i} className={`relative w-11 h-14 rounded-lg border-2 flex items-center justify-center transition-all duration-700 ${filled ? "border-gold bg-gold/20" : "border-bronze/30 bg-black/40"} ${filled && pulse ? "animate-pulse-gold" : ""}`}>
+              <span className={`text-2xl transition-opacity duration-500 ${filled ? "opacity-100" : "opacity-20"}`}>{filled ? "🏺" : ""}</span>
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-sand/80 text-xs uppercase tracking-widest">{label} <span className="text-gold font-bold">{progress}/3</span></p>
     </div>
   );
 }

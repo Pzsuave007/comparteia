@@ -10,7 +10,8 @@ import { useRoom, BACKEND } from "@/useRoom";
 import Dice from "@/components/Dice";
 import { play } from "@/sounds";
 import { QRCodeSVG } from "qrcode.react";
-import { ReactionOverlay, TimerBar, useCountdown } from "@/components/interactions";
+import { ReactionOverlay, TimerBar, useCountdown, ArchiveVault, SparkleBurst } from "@/components/interactions";
+import { startAmbient, stopAmbient } from "@/sounds";
 
 const API = `${BACKEND}/api`;
 const RUINS = "https://images.unsplash.com/photo-1565799446045-5ba401561908";
@@ -27,6 +28,33 @@ const DICE_META = {
 };
 
 const RANK_ICON = { explorer: "🧭", investigator: "🔎", archaeologist: "🏺" };
+const TILE_EMOJI = { character: "👤", location: "📍", event: "📜", trap: "⚠️", clue: "🔐", rest: "🏕️", path: "✨", temple: "🏛️", start: "🚩" };
+
+function BoardMap({ state }) {
+  const board = state.board || [];
+  const players = state.players || [];
+  return (
+    <div className="absolute bottom-0 left-0 right-0 z-20 bg-midnight/90 border-t border-bronze/30 p-3 overflow-x-auto">
+      <div className="flex gap-1.5 items-end min-w-max px-2">
+        {board.map((type, i) => {
+          const here = players.filter((p) => p.pos === i);
+          const secret = i > (state.explore_end || 24);
+          const locked = secret && !state.secret_open && type !== "temple";
+          return (
+            <div key={i} className={`relative rounded-lg flex items-center justify-center shrink-0 transition-all ${type === "temple" ? "w-16 h-14 bg-gold/25 border-2 border-gold animate-pulse-gold" : "w-10 h-12 border " + (locked ? "border-bronze/10 opacity-30" : secret ? "border-gold/60 bg-gold/10" : "border-bronze/30 bg-charcoal/60")}`}>
+              <span className="text-lg">{locked ? "·" : (TILE_EMOJI[type] || "·")}</span>
+              {here.length > 0 && (
+                <div className="absolute -top-3 flex -space-x-1">
+                  {here.map((p) => <span key={p.id} className="w-5 h-5 rounded-full bg-bronze border border-gold text-[9px] flex items-center justify-center text-midnight font-bold">{p.name[0]}</span>)}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export default function Host() {
   const [code, setCode] = useState(null);
@@ -85,6 +113,25 @@ function CreateRoom({ onCreated }) {
 function HostScreen({ code }) {
   const { state, send, reaction } = useRoom(code, "host");
   const prevPhase = useRef(null);
+  const prevProgress = useRef(0);
+  const [vaultPulse, setVaultPulse] = useState(false);
+
+  useEffect(() => {
+    const on = state?.sound && state?.status === "playing";
+    if (on) startAmbient(true); else stopAmbient();
+    return () => stopAmbient();
+  }, [state?.sound, state?.status]);
+
+  useEffect(() => {
+    if (!state || state.status !== "playing") return;
+    const mp = state.max_progress || 0;
+    if (mp > prevProgress.current) {
+      play("recovered", state.sound);
+      setVaultPulse(true);
+      setTimeout(() => setVaultPulse(false), 2600);
+    }
+    prevProgress.current = mp;
+  }, [state?.max_progress, state?.status]);
 
   useEffect(() => {
     if (!state) return;
@@ -105,7 +152,7 @@ function HostScreen({ code }) {
   return (
     <div className="relative min-h-screen overflow-hidden grain tv-vignette bg-midnight">
       {state.status === "lobby" && <Lobby state={state} send={send} />}
-      {state.status === "playing" && <GameStage state={state} hostLang={hostLang} />}
+      {state.status === "playing" && <GameStage state={state} hostLang={hostLang} vaultPulse={vaultPulse} />}
       {state.status === "finished" && <WinnerReveal state={state} send={send} />}
       {state.status !== "lobby" && <ControlBar state={state} send={send} />}
       <ReactionOverlay reaction={reaction} />
@@ -181,7 +228,7 @@ function Lobby({ state, send }) {
 }
 
 /* ------------------------------ GAME STAGE ------------------------------ */
-function GameStage({ state, hostLang }) {
+function GameStage({ state, hostLang, vaultPulse }) {
   const cur = state.current || {};
   const phase = state.phase;
   const player = state.current_player;
@@ -195,6 +242,16 @@ function GameStage({ state, hostLang }) {
   );
 
   let body = null;
+
+  if (phase === "moving") {
+    body = (<StageWrap><Dice value={cur.dice_value} size={200} /><div className="text-7xl mt-8">{TILE_EMOJI[cur.tile] || "✨"}</div><div className="font-display font-800 text-4xl text-parchment mt-3 text-center">{bi(hostLang, "AVANZA…", "MOVING…")}</div></StageWrap>);
+  }
+  if (phase === "clue_tile") {
+    body = (<StageWrap><Lock className="w-20 h-20 text-gold mb-4" /><h2 className="font-serif text-5xl text-gold">🔐 {bi(hostLang, "PISTA", "CLUE")}</h2><p className="text-sand/70 text-xl mt-4">{bi(hostLang, "Enviada al explorador", "Sent to the explorer")}</p></StageWrap>);
+  }
+  if (phase === "rest_tile") {
+    body = (<StageWrap><div className="text-9xl mb-6 animate-float">🏕️</div><h2 className="font-display font-800 text-5xl text-sand">{bi(hostLang, "CAMPAMENTO", "CAMP")}</h2></StageWrap>);
+  }
 
   if (phase === "roll") {
     body = (
@@ -242,7 +299,12 @@ function GameStage({ state, hostLang }) {
       <div className="absolute inset-0 bg-cover bg-center transition-all duration-700" style={{ backgroundImage: `url(${bg})` }} />
       <div className="absolute inset-0 bg-midnight/80" />
       <Banner />
-      <div className="relative z-10">{body}</div>
+      <div className="absolute top-4 right-6 z-30">
+        <ArchiveVault progress={state.max_progress || 0} pulse={vaultPulse} hostLang={hostLang} />
+      </div>
+      {phase === "feedback" && cur.was_correct && <SparkleBurst key={cur.question?.id} />}
+      <div className="relative z-10 pb-28">{body}</div>
+      <BoardMap state={state} />
     </div>
   );
 }
@@ -254,21 +316,42 @@ function StageWrap({ children }) {
 function TravelStage({ cur, state, hostLang, pLang }) {
   const dest = cur.candidate;
   const pos = dest?.map_position || { x: 50, y: 50 };
-  const [marker, setMarker] = useState({ x: 50, y: 90 });
-  useEffect(() => { const id = setTimeout(() => setMarker(pos), 200); return () => clearTimeout(id); }, [dest?.id]);
+  const start = { x: 50, y: 90 };
+  const [marker, setMarker] = useState(start);
+  const [arrived, setArrived] = useState(false);
+  useEffect(() => {
+    setMarker(start); setArrived(false);
+    const id = setTimeout(() => setMarker(pos), 250);
+    const id2 = setTimeout(() => setArrived(true), 1900);
+    return () => { clearTimeout(id); clearTimeout(id2); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dest?.id]);
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-10 py-20">
       <div className="relative w-full max-w-4xl aspect-[16/9] rounded-3xl overflow-hidden border-2 border-bronze/50 shadow-2xl">
         <img src={MAP} alt="" className="absolute inset-0 w-full h-full object-cover" />
         <div className="absolute inset-0 bg-midnight/30" />
+        {/* dotted route */}
+        <svg className="absolute inset-0 w-full h-full" preserveAspectRatio="none" viewBox="0 0 100 100">
+          <line x1={start.x} y1={start.y} x2={pos.x} y2={pos.y} stroke="#E5C05C" strokeWidth="0.5" strokeDasharray="2 2" opacity="0.8" />
+        </svg>
         {(state.pools.location || []).map((l) => (
           <div key={l.id} className="absolute -translate-x-1/2 -translate-y-1/2" style={{ left: `${l.map_position?.x || 50}%`, top: `${l.map_position?.y || 50}%` }}>
             <div className="w-2.5 h-2.5 rounded-full bg-bronze/70" />
           </div>
         ))}
-        <div className="absolute -translate-x-1/2 -translate-y-full transition-all duration-[1400ms] ease-out z-10" style={{ left: `${marker.x}%`, top: `${marker.y}%` }}>
-          <MapPin className="w-10 h-10 text-terracotta drop-shadow-lg animate-bounce" fill="#C05B3F" />
+        {/* walking camel/explorer */}
+        <div className="absolute -translate-x-1/2 -translate-y-1/2 transition-all duration-[1600ms] ease-in-out z-10" style={{ left: `${marker.x}%`, top: `${marker.y}%` }}>
+          <span className="text-4xl inline-block animate-float drop-shadow-lg">🐪</span>
         </div>
+        {/* arrival wax seal */}
+        {arrived && (
+          <div className="absolute -translate-x-1/2 -translate-y-1/2 z-20 animate-scale-in" style={{ left: `${pos.x}%`, top: `${pos.y}%` }}>
+            <div className="w-16 h-16 rounded-full bg-terracotta/90 border-4 border-[#8f2f26] flex items-center justify-center shadow-xl rotate-[-12deg]">
+              <span className="text-3xl">🏛️</span>
+            </div>
+          </div>
+        )}
       </div>
       <h2 className="font-display font-800 text-6xl text-gold mt-10 animate-scale-in text-center">{loc(dest, pLang)}</h2>
       <p className="text-sand/80 text-xl mt-3 italic">{bi(hostLang, "Tu investigación comienza…", "Your investigation begins…")}</p>
@@ -337,6 +420,12 @@ function FeedbackStage({ cur, state, hostLang, pLang }) {
         <div className="mt-8 animate-fade-up">
           <p className="font-serif text-3xl text-bronze animate-pulse">🔎 {bi(hostLang, "Verificando archivo…", "Verifying archive…")}</p>
           <p className="font-display text-4xl text-gold mt-4">🔐 {bi(hostLang, "RESULTADO ENVIADO AL INVESTIGADOR", "RESULT SENT TO PLAYER")}</p>
+        </div>
+      )}
+      {correct && cur.streak >= 2 && (
+        <div className="mt-6 animate-scale-in">
+          <span className="font-display font-800 text-5xl text-terracotta">🔥 {bi(hostLang, "RACHA", "STREAK")} x{cur.streak}</span>
+          <span className="block text-gold text-2xl mt-1">+{cur.honor_gain} {bi(hostLang, "honor", "honor")}</span>
         </div>
       )}
       {correct && cur.phase_purpose === "clue" && (
