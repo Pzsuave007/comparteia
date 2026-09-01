@@ -35,21 +35,27 @@ const RANK_ICON = { explorer: "🧭", investigator: "🔎", archaeologist: "🏺
 const TILE_EMOJI = { character: "👤", location: "📍", event: "📜", trap: "⚠️", clue: "🔐", rest: "🏕️", path: "✨", temple: "🏛️", start: "🚩", surprise: "🎁" };
 
 /* ----------------------- Adventure map geometry ----------------------- */
-// Winding closed-loop trail (rounded, organic) with arc-length spaced tiles.
+// Serpentine closed-loop trail that winds through the map interior.
 function computeGeometry(exploreEnd, temple) {
-  const cx = 50, cy = 53, rx = 43, ry = 39, n = 3.8, amp = 0.085, waves = 6;
-  const sample = (t) => {
-    const theta = 2 * Math.PI * t + Math.PI / 2; // start at bottom
-    const c = Math.cos(theta), s = Math.sin(theta);
-    const ex = 2 / n;
-    const sx = Math.sign(c) * Math.pow(Math.abs(c), ex);
-    const sy = Math.sign(s) * Math.pow(Math.abs(s), ex);
-    const rr = 1 + amp * Math.sin(waves * theta);
-    return { x: cx + rx * rr * sx, y: cy + ry * rr * sy };
-  };
-  const M = 360;
+  const xL = 9, xR = 91, yTop = 15, yBot = 89, amp = 27, waves = 2;
   const raw = [];
-  for (let i = 0; i < M; i++) raw.push(sample(i / M));
+  const NT = 200, NB = 200, NS = 90;
+  // top edge (left -> right), dips downward into the interior
+  for (let i = 0; i <= NT; i++) {
+    const u = i / NT;
+    raw.push({ x: xL + (xR - xL) * u, y: yTop + amp * Math.abs(Math.sin(waves * Math.PI * u)) });
+  }
+  // right edge (top -> bottom)
+  for (let i = 1; i < NS; i++) raw.push({ x: xR, y: yTop + (yBot - yTop) * (i / NS) });
+  // bottom edge (right -> left), rises upward into the interior
+  for (let i = 0; i <= NB; i++) {
+    const u = i / NB;
+    raw.push({ x: xR - (xR - xL) * u, y: yBot - amp * Math.abs(Math.sin(waves * Math.PI * u)) });
+  }
+  // left edge (bottom -> top)
+  for (let i = 1; i < NS; i++) raw.push({ x: xL, y: yBot - (yBot - yTop) * (i / NS) });
+
+  const M = raw.length;
   const cum = [0];
   for (let i = 1; i <= M; i++) {
     const a = raw[i % M], b = raw[i - 1];
@@ -67,14 +73,23 @@ function computeGeometry(exploreEnd, temple) {
     return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f };
   };
   const loopN = exploreEnd + 1;
+  let bcIdx = 0, bBest = 1e9;
+  for (let i = 0; i < M; i++) {
+    if (raw[i].y > yBot - 6) { const d = Math.abs(raw[i].x - 50); if (d < bBest) { bBest = d; bcIdx = i; } }
+  }
+  const startLen = cum[bcIdx];
   const pts = [];
-  for (let i = 0; i < loopN; i++) pts[i] = at(i * L / loopN);
+  for (let i = 0; i < loopN; i++) pts[i] = at(startLen + i * L / loopN);
   let loopD = `M ${raw[0].x} ${raw[0].y} `;
   for (let i = 1; i < M; i++) loopD += `L ${raw[i].x} ${raw[i].y} `;
   loopD += "Z";
-  // secret branch entrance = loop tile nearest top-center
-  let eIdx = 0;
-  for (let i = 0; i < loopN; i++) if (pts[i].y < pts[eIdx].y) eIdx = i;
+  // secret branch entrance = loop tile nearest the map center-top
+  const cx = 50, cy = 52;
+  let eIdx = 0, best = 1e9;
+  for (let i = 0; i < loopN; i++) {
+    const d = Math.abs(pts[i].x - cx) + Math.max(0, pts[i].y - 20);
+    if (pts[i].y < 55 && d < best) { best = d; eIdx = i; }
+  }
   const entrance = pts[eIdx];
   const secStart = exploreEnd + 1;
   const count = temple - secStart + 1;
@@ -82,8 +97,7 @@ function computeGeometry(exploreEnd, temple) {
   for (let k = 0; k < count; k++) {
     const idx = secStart + k;
     const t = count <= 1 ? 1 : k / (count - 1);
-    const bow = Math.sin(t * Math.PI) * 6;
-    pts[idx] = { x: entrance.x + (center.x - entrance.x) * t - bow, y: entrance.y + (center.y - entrance.y) * t };
+    pts[idx] = { x: entrance.x + (center.x - entrance.x) * t, y: entrance.y + (center.y - entrance.y) * t };
   }
   let secretD = `M ${entrance.x} ${entrance.y} `;
   for (let k = 0; k < count; k++) { const p = pts[secStart + k]; secretD += `L ${p.x} ${p.y} `; }
@@ -208,14 +222,29 @@ function AdventureMap({ state }) {
           );
         }
         if (secret && !secretOpen) return null;  // hidden until 3 pieces found
-        const isPlain = type === "path" || type === "rest" || type === "start";
+        const isPlain = type === "path" || type === "rest";
         const isOpt = optIdx.has(idx);
-        const content = isStart ? "🚩" : secret ? "✨" : isPlain ? String(idx) : (TILE_EMOJI[type] || "·");
+        if (isStart) {
+          return (
+            <div key={idx} className="absolute -translate-x-1/2 -translate-y-1/2 z-[5]" style={{ left: `${pts[idx].x}%`, top: `${pts[idx].y}%` }}>
+              <div className="rounded-full flex items-center justify-center border-2 border-emerald bg-emerald/40 shadow-md"
+                style={{ width: "clamp(20px,2.2vw,34px)", height: "clamp(20px,2.2vw,34px)", fontSize: "clamp(12px,1.4vw,20px)" }}>🚩</div>
+            </div>
+          );
+        }
+        if (isPlain) {
+          return (
+            <div key={idx} className="absolute -translate-x-1/2 -translate-y-1/2 z-[3]" style={{ left: `${pts[idx].x}%`, top: `${pts[idx].y}%` }}>
+              <div className={`rounded-full border shadow-sm transition-all duration-300 ${secret ? "border-gold/70 bg-gold/25" : "border-[#7a5a30]/80 bg-parchment/85"}`}
+                style={{ width: "clamp(9px,1.05vw,17px)", height: "clamp(9px,1.05vw,17px)" }} />
+            </div>
+          );
+        }
         return (
           <div key={idx} className="absolute -translate-x-1/2 -translate-y-1/2 z-[4]" style={{ left: `${pts[idx].x}%`, top: `${pts[idx].y}%` }}>
-            <div className={`rounded-full flex items-center justify-center border-2 shadow-md backdrop-blur-sm transition-all duration-300 ${isOpt ? "ring-4 ring-gold scale-125 animate-pulse z-[7]" : ""} ${isStart ? "border-emerald bg-emerald/40" : secret ? "border-gold/70 bg-gold/20" : isPlain ? "border-[#7a5a30] bg-parchment/90" : "border-bronze/70 bg-charcoal/85"}`}
-              style={{ width: "clamp(26px,3vw,46px)", height: "clamp(26px,3vw,46px)" }}>
-              <span className={isPlain && !isStart ? "font-display font-bold text-[#3a2a14]" : ""} style={{ fontSize: "clamp(12px,1.55vw,22px)", lineHeight: 1 }}>{content}</span>
+            <div className={`rounded-full flex items-center justify-center border-2 shadow-md backdrop-blur-sm transition-all duration-300 ${isOpt ? "ring-4 ring-gold scale-150 animate-pulse z-[7]" : ""} border-bronze/70 bg-charcoal/85`}
+              style={{ width: "clamp(18px,2vw,34px)", height: "clamp(18px,2vw,34px)" }}>
+              <span style={{ fontSize: "clamp(11px,1.35vw,20px)", lineHeight: 1 }}>{TILE_EMOJI[type] || "·"}</span>
             </div>
           </div>
         );
@@ -235,7 +264,7 @@ function AdventureMap({ state }) {
             style={{ left: `calc(${pts[idx].x}% + ${off}%)`, top: `${pts[idx].y}%`, transition: "left 380ms ease-in-out, top 380ms ease-in-out" }}>
             <div className={`relative flex flex-col items-center ${isWalking ? "animate-bounce" : "animate-float"}`}>
               <div className={`rounded-full overflow-hidden border-[3px] shadow-2xl ${active ? "ring-4 ring-gold/70" : ""}`}
-                style={{ width: "clamp(38px,4.4vw,64px)", height: "clamp(38px,4.4vw,64px)", borderColor: colorOf[p.id] }}>
+                style={{ width: "clamp(30px,3.2vw,50px)", height: "clamp(30px,3.2vw,50px)", borderColor: colorOf[p.id] }}>
                 <img src={EXPLORER_TOKEN} alt={p.name} className="w-full h-full object-cover" />
               </div>
               <span className="mt-1 px-2 py-0.5 rounded-full text-[10px] lg:text-xs font-bold text-midnight shadow-md whitespace-nowrap max-w-[90px] truncate"

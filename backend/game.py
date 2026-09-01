@@ -12,9 +12,8 @@ import time
 CATEGORIES = ["character", "location", "event"]
 QUESTION_SECONDS = 30
 
-EXPLORE_END = 40     # exploration loop tiles 1..40
-SECRET_START = 41    # secret path tiles 41..45
-TEMPLE = 46          # temple tile index (win)
+EXPLORE_END = 40     # legacy default (per-room value stored in room["explore_end"])
+SECRET_LEN = 5       # hidden tiles on the secret path before the Temple
 BACK_STEPS = 3       # trap penalty
 STOP_TYPES = {"character", "location", "event", "clue"}  # tiles worth stopping at
 
@@ -95,6 +94,7 @@ def create_room(host_language="bilingual", show_translation=True):
         "players": {}, "order": [], "turn_index": 0,
         "phase": "lobby", "current": {}, "secret": {}, "pools": {},
         "private": {}, "winner_id": None, "board": [],
+        "explore_end": 0, "temple_index": 0,
     }
     ROOMS[code] = room
     return room
@@ -119,40 +119,36 @@ def current_player_id(room):
 
 
 def _gen_board():
-    """Oval circuit with mostly plain step tiles and a few spaced situation tiles."""
-    loop_len = EXPLORE_END
-    specials = (["character"] * 3 + ["location"] * 3 + ["event"] * 3
-                + ["trap"] * 2 + ["clue"] * 2 + ["surprise"] * 3)  # 16 spaced situations
+    """Winding loop packed with step tiles; situations spaced 4-6 tiles apart (~130 tiles)."""
+    specials = (["character"] * 4 + ["location"] * 4 + ["event"] * 4
+                + ["trap"] * 3 + ["clue"] * 3 + ["surprise"] * 4)  # 22 spaced situations
     random.shuffle(specials)
-    tiles = ["path"] * loop_len  # loop indices 0..loop_len-1 -> board 1..loop_len
-    n = len(specials)
-    gap = loop_len / n
-    used = set()
-    for i, s in enumerate(specials):
-        idx = int(i * gap + random.randint(0, 1)) % loop_len
-        while idx in used:
-            idx = (idx + 1) % loop_len
-        used.add(idx)
-        tiles[idx] = s
-    board = [{"type": "start"}] + [{"type": t} for t in tiles]           # 0..EXPLORE_END
-    board += [{"type": "path"} for _ in range(SECRET_START, TEMPLE)]     # SECRET_START..TEMPLE-1
-    board.append({"type": "temple"})                                     # TEMPLE
-    return board
+    tiles = []
+    for s in specials:
+        tiles.append(s)
+        for _ in range(random.randint(4, 6)):
+            tiles.append("path")
+    explore_end = len(tiles)                                    # loop tiles = board 1..explore_end
+    board = [{"type": "start"}] + [{"type": t} for t in tiles]  # index 0 = start
+    board += [{"type": "path"} for _ in range(SECRET_LEN)]      # hidden secret path
+    board.append({"type": "temple"})
+    temple_index = len(board) - 1
+    return board, explore_end, temple_index
 
 
 def has_three(room, pid):
     return all(room["private"][pid]["discovered"].values())
 
 
-def _move(pos, steps, has3):
+def _move(pos, steps, has3, explore_end, temple):
     if has3:
-        return min(pos + steps, TEMPLE)
-    return ((pos - 1 + steps) % EXPLORE_END) + 1
+        return min(pos + steps, temple)
+    return ((pos - 1 + steps) % explore_end) + 1
 
 
-def _traversal(pos, steps, has3):
+def _traversal(pos, steps, has3, explore_end, temple):
     """Ordered list of tile indices stepped over (1..steps)."""
-    return [_move(pos, k, has3) for k in range(1, steps + 1)]
+    return [_move(pos, k, has3, explore_end, temple) for k in range(1, steps + 1)]
 
 
 # --------------------------------------------------------------------------
@@ -165,7 +161,10 @@ def start_game(room, content):
     room["turn_index"] = 0
     room["status"] = "playing"
     room["winner_id"] = None
-    room["board"] = _gen_board()
+    board, explore_end, temple_index = _gen_board()
+    room["board"] = board
+    room["explore_end"] = explore_end
+    room["temple_index"] = temple_index
     for pid in ids:
         room["private"][pid] = new_private()
         room["players"][pid]["honor"] = 0
@@ -195,7 +194,7 @@ def roll_dice(room, content, pid):
     p = room["players"][pid]
     frm = p["pos"]
     has3 = has_three(room, pid)
-    seq = _traversal(frm, value, has3)
+    seq = _traversal(frm, value, has3, room["explore_end"], room["temple_index"])
     final = seq[-1]
     options = []
     for i, idx in enumerate(seq):
@@ -328,10 +327,11 @@ def submit_answer(room, content, pid, answer):
 
 def _resolve_surprise(room, p):
     has3 = has_three(room, p["id"])
+    ee, ti = room["explore_end"], room["temple_index"]
     r = random.random()
     if r < 0.4:
         amt = random.randint(1, 2)
-        p["pos"] = _move(p["pos"], amt, has3)
+        p["pos"] = _move(p["pos"], amt, has3, ee, ti)
         return {"kind": "forward", "amount": amt}
     elif r < 0.7:
         amt = random.randint(1, 2)
@@ -513,7 +513,7 @@ def public_state(room, content):
         "players": players, "max_progress": max_progress,
         "secret_open": max_progress >= 3,
         "board": [t["type"] for t in room["board"]],
-        "temple_index": TEMPLE, "explore_end": EXPLORE_END,
+        "temple_index": room.get("temple_index", 0), "explore_end": room.get("explore_end", 0),
         "current_player": ({"id": cur_player["id"], "name": cur_player["name"],
                             "rank": cur_player["rank"], "language": cur_player["language"]}
                            if cur_player else None),

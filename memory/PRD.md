@@ -50,10 +50,11 @@ secret server-side verification, dramatic winner reveal. Bilingual (ES/EN) PER P
   stepping animation (`walkPath`/`loopSeq`) with CSS transitions. Roll/moving/clue/rest phases now use a
   compact bottom-right HUD instead of a full-screen overlay so the walk stays visible.
   Assets: AI-generated map background, explorer coin token, temple token.
-- ✅ Winding board + "choose where to stop" (2026-06): board is now a ~40-tile winding closed-loop
-  trail (arc-length spaced tiles over an organic squircle path in `computeGeometry`, Host.jsx) like a
-  treasure-hunt board — mostly numbered step tiles with spaced situation tiles (3 char/3 loc/3 event,
-  2 trap, 2 clue, 3 surprise). When a roll makes the pawn pass over situation tiles, the player CHOOSES
+- ✅ Winding board + "choose where to stop" (2026-06): board is now a dense serpentine closed-loop
+  trail (~130 tiles) that winds through the map INTERIOR with lobes (computeGeometry in Host.jsx,
+  arc-length spaced dots) — mostly small step dots with spaced situation tiles (4 char/4 loc/4 event,
+  3 trap, 3 clue, 4 surprise; 4-6 step tiles between situations; explore_end/temple_index are per-room
+  dynamic). Start is bottom-center. When a roll makes the pawn pass over situation tiles, the player CHOOSES
   on the phone to stop at any passed situation (loses remaining steps) or advance the full roll
   (`choose_stop` phase; TV highlights the reachable option tiles in gold). Traps are AVOIDED if merely
   passed (only trigger when landed/stopped on). Surprise 🎁 tiles (on landing) give a random mini-event
