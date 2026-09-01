@@ -151,6 +151,9 @@ export const T = {
     sfBack: "¡Ups! Retrocedes",
     sfHonor: "¡Tesoro! Ganas honor",
     tilesWord: "casillas",
+    myProgress: "Mi progreso",
+    searching: "Buscando…",
+    notFoundYet: "Sin recuperar",
     connecting: "Conectando…",
   },
   en: {
@@ -292,6 +295,9 @@ export const T = {
     sfBack: "Oops! Move back",
     sfHonor: "Treasure! You gain honor",
     tilesWord: "tiles",
+    myProgress: "My progress",
+    searching: "Searching…",
+    notFoundYet: "Not recovered",
     connecting: "Connecting…",
   },
 };

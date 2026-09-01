@@ -508,10 +508,55 @@ function Notebook({ state, priv, lang, t }) {
     { id: "character", labelKey: "characters", icon: User }, { id: "location", labelKey: "locations", icon: MapPin },
     { id: "event", labelKey: "events", icon: Scroll }, { id: "clues", labelKey: "clues", icon: Lock },
   ];
+  const pieces = [
+    { cat: "character", labelKey: "person", icon: User },
+    { cat: "location", labelKey: "place", icon: MapPin },
+    { cat: "event", labelKey: "event", icon: Scroll },
+  ];
+  const foundEntity = (c) => (state.pools?.[c] || []).find((e) => e.id === priv?.recovered_ids?.[c]);
+  const doneCount = pieces.filter((p) => priv?.discovered?.[p.cat]).length;
   return (
     <div className="parchment min-h-full">
       <div className="p-5">
         <div className="flex items-center gap-2 mb-4"><BookOpen className="w-6 h-6 text-terracotta" /><h2 className="font-serif text-2xl text-[#3a2a14]">{t("caseFile")}</h2></div>
+
+        {/* Private progress — only this player can see it */}
+        <div className="bg-white/50 border border-[#3a2a14]/20 rounded-2xl p-4 mb-5" data-testid="my-progress">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs uppercase tracking-widest text-terracotta font-bold flex items-center gap-1"><Lock className="w-3.5 h-3.5" /> {t("myProgress")}</p>
+            <span className="font-display font-bold text-[#3a2a14]" data-testid="progress-count">{doneCount}/3</span>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            {pieces.map((p) => {
+              const done = !!priv?.discovered?.[p.cat];
+              const e = foundEntity(p.cat);
+              return (
+                <div key={p.cat} data-testid={`progress-${p.cat}`}
+                  className={`rounded-xl overflow-hidden border text-center ${done ? "border-bronze ring-2 ring-gold bg-gold/10" : "border-dashed border-[#3a2a14]/30 bg-[#3a2a14]/5"}`}>
+                  <div className="aspect-square relative bg-[#3a2a14]/10 flex items-center justify-center">
+                    {done && e ? (
+                      <>
+                        <img src={e.image} alt="" className="w-full h-full object-cover" />
+                        <div className="absolute top-1 right-1 bg-gold rounded-full p-0.5"><CheckCircle2 className="w-4 h-4 text-midnight" /></div>
+                      </>
+                    ) : (
+                      <p.icon className="w-8 h-8 text-[#3a2a14]/30" />
+                    )}
+                  </div>
+                  <div className="px-1.5 py-1.5">
+                    <div className="text-[10px] uppercase tracking-wide text-[#6b5836] font-semibold">{t(p.labelKey)}</div>
+                    {done && e ? (
+                      <div className="font-serif text-xs text-[#3a2a14] truncate leading-tight">{loc(e, lang)}</div>
+                    ) : (
+                      <div className="text-[10px] text-[#6b5836] italic">{t("searching")}</div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         <div className="flex gap-2 flex-wrap mb-5">
           {tabs.map((tb) => (
             <button key={tb.id} data-testid={`notebook-tab-${tb.id}`} onClick={() => setCat(tb.id)}
