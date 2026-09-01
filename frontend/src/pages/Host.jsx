@@ -30,28 +30,36 @@ const DICE_META = {
 const RANK_ICON = { explorer: "🧭", investigator: "🔎", archaeologist: "🏺" };
 const TILE_EMOJI = { character: "👤", location: "📍", event: "📜", trap: "⚠️", clue: "🔐", rest: "🏕️", path: "✨", temple: "🏛️", start: "🚩" };
 
-function BoardMap({ state }) {
+function BigBoard({ state }) {
   const board = state.board || [];
   const players = state.players || [];
+  const cols = 8;
+  const rows = [];
+  for (let i = 0; i < board.length; i += cols) {
+    rows.push(board.slice(i, i + cols).map((t, j) => ({ type: t, idx: i + j })));
+  }
   return (
-    <div className="absolute bottom-0 left-0 right-0 z-20 bg-midnight/90 border-t border-bronze/30 p-3 overflow-x-auto">
-      <div className="flex gap-1.5 items-end min-w-max px-2">
-        {board.map((type, i) => {
-          const here = players.filter((p) => p.pos === i);
-          const secret = i > (state.explore_end || 24);
-          const locked = secret && !state.secret_open && type !== "temple";
-          return (
-            <div key={i} className={`relative rounded-lg flex items-center justify-center shrink-0 transition-all ${type === "temple" ? "w-16 h-14 bg-gold/25 border-2 border-gold animate-pulse-gold" : "w-10 h-12 border " + (locked ? "border-bronze/10 opacity-30" : secret ? "border-gold/60 bg-gold/10" : "border-bronze/30 bg-charcoal/60")}`}>
-              <span className="text-lg">{locked ? "·" : (TILE_EMOJI[type] || "·")}</span>
-              {here.length > 0 && (
-                <div className="absolute -top-3 flex -space-x-1">
-                  {here.map((p) => <span key={p.id} className="w-5 h-5 rounded-full bg-bronze border border-gold text-[9px] flex items-center justify-center text-midnight font-bold">{p.name[0]}</span>)}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 lg:gap-4 px-6 pt-24 pb-8">
+      {rows.map((row, ri) => (
+        <div key={ri} className={`flex gap-3 lg:gap-4 ${ri % 2 === 1 ? "flex-row-reverse" : ""}`}>
+          {row.map(({ type, idx }) => {
+            const here = players.filter((p) => p.pos === idx);
+            const secret = idx > (state.explore_end || 24);
+            const locked = secret && !state.secret_open && type !== "temple";
+            return (
+              <div key={idx} className={`relative rounded-2xl flex items-center justify-center shrink-0 border-2 shadow-xl transition-all duration-500 ${type === "temple" ? "w-24 h-24 lg:w-28 lg:h-28 bg-gold/25 border-gold animate-pulse-gold" : "w-16 h-16 lg:w-24 lg:h-24 " + (locked ? "border-bronze/10 bg-black/50 opacity-25" : secret ? "border-gold/60 bg-gold/15" : "border-bronze/40 bg-charcoal/75")}`}>
+                <span className="text-3xl lg:text-5xl">{locked ? "·" : (TILE_EMOJI[type] || "·")}</span>
+                <span className="absolute bottom-1 right-1.5 text-[10px] text-sand/40 font-display">{idx}</span>
+                {here.length > 0 && (
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 flex -space-x-2">
+                    {here.map((p) => <span key={p.id} className="w-8 h-8 lg:w-9 lg:h-9 rounded-full bg-bronze border-2 border-gold text-sm flex items-center justify-center text-midnight font-bold shadow-lg animate-float">{p.name[0]}</span>)}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }
@@ -292,19 +300,19 @@ function GameStage({ state, hostLang, vaultPulse }) {
     body = <SetbackStage cur={cur} hostLang={hostLang} />;
   }
 
-  const bg = phase === "travel" ? MAP : phase === "feedback" && cur.was_correct ? TEMPLE : RUINS;
+  const focus = ["choose_candidate", "question", "feedback"].includes(phase);
 
   return (
-    <div className="relative min-h-screen">
-      <div className="absolute inset-0 bg-cover bg-center transition-all duration-700" style={{ backgroundImage: `url(${bg})` }} />
-      <div className="absolute inset-0 bg-midnight/80" />
+    <div className="relative min-h-screen overflow-hidden">
+      <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${MAP})` }} />
+      <BigBoard state={state} />
+      <div className="absolute inset-0" style={{ background: focus ? "rgba(11,19,32,0.9)" : "rgba(11,19,32,0.45)" }} />
       <Banner />
       <div className="absolute top-4 right-6 z-30">
         <ArchiveVault progress={state.max_progress || 0} pulse={vaultPulse} hostLang={hostLang} />
       </div>
       {phase === "feedback" && cur.was_correct && <SparkleBurst key={cur.question?.id} />}
-      <div className="relative z-10 pb-28">{body}</div>
-      <BoardMap state={state} />
+      {body && <div className="relative z-10">{body}</div>}
     </div>
   );
 }
