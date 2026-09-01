@@ -1,0 +1,143 @@
+{
+  "theme": "Dark Cinematic Adventure (TV) + Tactile Field Notebook (Mobile)",
+  "typography": {
+    "headings": {
+      "font_family": "Playfair Display, serif",
+      "weights": ["600", "800"],
+      "usage": "Used for all main titles, TV dramatic reveals, and player names. Gives an ancient, adventurous, Indiana Jones-esque feel.",
+      "classes": "font-serif tracking-tight text-parchment-100 drop-shadow-md"
+    },
+    "body": {
+      "font_family": "Manrope, sans-serif",
+      "weights": ["400", "500", "700"],
+      "usage": "Highly readable, modern, clean. Used for multiple choice questions, clues, and UI elements. Excellent legibility for all ages.",
+      "classes": "font-sans tracking-normal text-parchment-200"
+    },
+    "scales": {
+      "tv_h1": "text-6xl sm:text-7xl lg:text-8xl leading-none",
+      "tv_question": "text-4xl sm:text-5xl lg:text-6xl leading-tight",
+      "mobile_h1": "text-3xl sm:text-4xl",
+      "mobile_h2": "text-2xl sm:text-3xl",
+      "body": "text-base sm:text-lg"
+    }
+  },
+  "colors": {
+    "backgrounds": {
+      "deep_midnight": "#0B1320",
+      "dark_charcoal": "#1A1A1A",
+      "ivory_parchment": "#F4EEDC",
+      "sand_desert": "#DDC8A0"
+    },
+    "accents": {
+      "ancient_bronze": "#C89B3C",
+      "gold_reward": "#E5C05C",
+      "terracotta": "#C05B3F",
+      "muted_emerald": "#2E6F40"
+    },
+    "feedback": {
+      "correct": "#348C52",
+      "incorrect": "#B94034"
+    },
+    "text": {
+      "primary_light": "#FDFBF7",
+      "secondary_light": "#DDC8A0",
+      "primary_dark": "#1A1A1A"
+    }
+  },
+  "visual_enhancers": {
+    "tv_surface": "Crystal Glassmorphism over ancient backgrounds: `backdrop-blur-2xl bg-midnight/60 border border-bronze/20 shadow-2xl`. Never use raw transparency.",
+    "mobile_surface": "Tactile Notebook: Solid `bg-dark_charcoal` or `bg-ivory_parchment` with sharp inner contrasts (`border-black/10`). Avoid excessive glassmorphism on the phone to maintain the 'field notebook' illusion.",
+    "textures": "Add subtle SVG noise or grain overlay to backgrounds to kill 'digital flatness' and simulate ancient parchment or stone.",
+    "borders": "1px borders tinted with Bronze (`border-[#C89B3C]/30`) to frame cards and sections.",
+    "shadows": "Warm, ambient shadows. Example: `shadow-[0_8px_32px_rgba(200,155,60,0.1)]` for gold highlights."
+  },
+  "layouts": {
+    "tv_host_screen": {
+      "concept": "Cinematic Presentation Layer",
+      "grid": "Center-focused for narrative moments (Dice Roll, Winner Reveal) transitioning to Split-Screen (Question + Map/Travel Animation).",
+      "spacing": "Extremely generous. `p-12` to `p-24`. Content must breathe and be visible from the couch.",
+      "background": "Full viewport immersive images with a `bg-gradient-to-t from-[#0B1320] via-[#0B1320]/80 to-transparent` overlay."
+    },
+    "mobile_companion": {
+      "concept": "Personal Field Notebook (MI EXPEDIENTE)",
+      "grid": "Mobile-first standard flow. Bottom Navigation for notebook tabs (Personajes, Lugares, Acontecimientos, Pistas).",
+      "cards": "Bento-style candidate grids. 2-column or 3-column. Use heavy dimming/grayscale for 'greyed-out' discarded clues.",
+      "touch_targets": "Minimum `h-14`, large padding `p-4` or `p-6` to ensure it works beautifully for adults and kids."
+    },
+    "admin_panel": {
+      "concept": "Utilitarian Dashboard with Theme Hints",
+      "grid": "Standard sidebar + main content area. High density grid (`gap-4`).",
+      "styling": "Use standard Shadcn, but apply the `deep_midnight` and `ancient_bronze` subtly so it feels connected to the game."
+    }
+  },
+  "motion": {
+    "dice_roll": "3D Physics or High-fidelity Framer Motion sequence. The dice MUST feel weighty and ancient.",
+    "reveals": "Dramatic fade-in-up (`translate-y-8 opacity-0` to `translate-y-0 opacity-100`) with a stagger effect.",
+    "feedback": "Correct: Pulse subtle green, unlock sound. Incorrect: Shake (x-axis), subtle red flash.",
+    "winner": "Confetti (using `react-confetti`), golden light sweep across the screen, massive scale-in of the winner's name."
+  },
+  "accessibility": {
+    "contrast": "Ensure text over images has sufficient contrast by applying text shadows or dark/light scrims.",
+    "focus": "All interactive elements on Mobile must have clear focus/active states (`active:scale-95`).",
+    "test_ids": "All interactive and key informational elements MUST include a `data-testid` attribute (e.g., `data-testid=\"roll-dice-btn\"`, `data-testid=\"clue-card\"`)."
+  },
+  "media": {
+    "image_urls": {
+      "tv_background_night_ruins": {
+        "url": "https://images.unsplash.com/photo-1565799446045-5ba401561908",
+        "description": "Dark ancient desert ruins under night sky. Use for TV Host lobby and suspense backgrounds. Apply heavy dark overlay.",
+        "category": "tv_background"
+      },
+      "map_parchment": {
+        "url": "https://images.unsplash.com/photo-1608924066819-930edc42986a",
+        "description": "Old treasure map with compass on a wooden table. Use for the Mobile Map view or TV travel animation background.",
+        "category": "mobile_background"
+      },
+      "stone_temple_warm": {
+        "url": "https://images.unsplash.com/photo-1767533427544-5f88d3fe4eed",
+        "description": "Sunlight streaming into an ancient stone temple corridor. Use for successful revelations or the Winner screen on TV.",
+        "category": "tv_background"
+      },
+      "investigation_notebook": {
+        "url": "https://images.unsplash.com/photo-1743715033222-412b6e6613db",
+        "description": "Magnifying glass and vintage items lying on an old map. Perfect hero graphic for the TV lobby or mobile login screen.",
+        "category": "ui_graphic"
+      }
+    }
+  },
+  "3d_libraries": {
+    "recommendation": "Use `framer-motion` for complex 2D animations (travel map, card reveals). For the 3D dice, you can use `framer-motion-3d` or `react-three-fiber` if you want a true 3D rolling physics object. If 3D is too complex for the timeframe, use a high-quality CSS 3D transform cube with rapid rotation."
+  },
+  "component_instructions": {
+    "buttons": "Do NOT use generic Shadcn buttons for the game UI. Mobile game buttons should be chunky, tactile, with `border-b-4 border-bronze-dark` to feel pressable.",
+    "cards": "For 'MI EXPEDIENTE', candidate cards must show visual state clearly: 'unknown' (normal), 'discarded' (grayscale, opacity-50, maybe an X overlay), 'recovered' (golden glow, checkmark).",
+    "inputs": "Use Shadcn for the Admin Panel and Mobile Join Flow, but customize Mobile inputs to have larger text, larger padding, and a warm beige/dark charcoal theme."
+  },
+  "instructions_to_main_agent": [
+    "You are building a dual-interface game (TV screen + Mobile Phone). This requires careful responsive design and potentially separate route structures (e.g., /host vs /play).",
+    "DO NOT make the TV interface look like an admin dashboard. It is a cinematic experience. Use large, dramatic typography and full-bleed background images.",
+    "DO NOT use a fully transparent background in overlays or floating UI elements over images. ALWAYS use a backdrop-blur with a semi-opaque color (e.g., bg-black/60).",
+    "The Phone UI is a 'field notebook'. Keep it dark or warm ivory, focused on large grid cards and easy tapping.",
+    "Implement WebSockets effectively to push updates from the server to the TV and Mobile instantly.",
+    "Make sure the multiple-choice questions on the TV are massive—readable from across a living room.",
+    "Always apply `data-testid` to interactive elements."
+  ],
+  "UNIVERSAL GUIDELINES FOR MAIN AGENT": [
+    "You tend to converge toward generic, 'on distribution' outputs. In frontend design, this creates what users call the 'AI slop' aesthetic. Avoid this: make creative, distinctive frontends that surprise and delight.",
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy.",
+    "Use glass-morphism effects with backdrop filters (12-24px blur).",
+    "You MUST NOT apply universal transition. Eg: transition: all. This results in breaking transforms. Always add transitions for specific interactive elements like button, input excluding transforms.",
+    "You MUST NOT center align the app container, ie do not add .App { text-align: center; } in the css file. This disrupts the human natural reading flow of text.",
+    "Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style.",
+    "NEVER: use AI assistant Emoji characters like 🤖🧠💭💡🔮🎯 etc for icons.",
+    "Every interaction needs micro-animations - hover states, transitions, parallax effects, and entrance animations. Static = dead.",
+    "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
+    "Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations: separates good from extraordinary.",
+    "Main agent relies on these image URLs. Missing categories (especially sponsor logos) = main agent will use placeholder text which is FORBIDDEN.",
+    "Prioritize using pre-existing components from src/components/ui when applicable.",
+    "Create new components that match the style and conventions of existing components when needed.",
+    "Use sonner for toasts, located in /app/src/components/ui/sonner.js."
+  ]
+}

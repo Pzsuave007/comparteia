@@ -1,0 +1,87 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800&family=Playfair+Display:ital,wght@0,500;0,600;0,700;0,800;1,500&family=Manrope:wght@400;500;600;700;800&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 210 42% 8%;
+  --foreground: 40 40% 92%;
+  --card: 210 34% 12%;
+  --card-foreground: 40 40% 92%;
+  --popover: 210 40% 9%;
+  --popover-foreground: 40 40% 92%;
+  --primary: 41 55% 51%;
+  --primary-foreground: 210 42% 8%;
+  --secondary: 210 20% 18%;
+  --secondary-foreground: 40 40% 92%;
+  --muted: 210 18% 20%;
+  --muted-foreground: 40 15% 70%;
+  --accent: 41 55% 51%;
+  --accent-foreground: 210 42% 8%;
+  --destructive: 6 55% 47%;
+  --destructive-foreground: 40 40% 96%;
+  --border: 41 30% 40%;
+  --input: 210 20% 22%;
+  --ring: 41 55% 51%;
+  --radius: 0.75rem;
+}
+
+* { border-color: hsl(var(--border) / 0.25); }
+
+body {
+  margin: 0;
+  font-family: 'Manrope', system-ui, sans-serif;
+  background: #0B1320;
+  color: #F4EEDC;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection { background: #C89B3C; color: #0B1320; }
+
+/* Grain / parchment texture overlay */
+.grain::before {
+  content: "";
+  position: absolute; inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  opacity: 0.05; pointer-events: none; z-index: 1; mix-blend-mode: overlay;
+}
+
+.parchment {
+  background-color: #F4EEDC;
+  background-image: radial-gradient(circle at 20% 20%, rgba(200,155,60,0.08), transparent 40%),
+                    radial-gradient(circle at 80% 80%, rgba(192,91,63,0.08), transparent 40%);
+  color: #241a10;
+}
+
+.tv-vignette::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  box-shadow: inset 0 0 220px rgba(0,0,0,0.75); z-index: 2;
+}
+
+.glass {
+  background: rgba(11,19,32,0.62);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(200,155,60,0.22);
+}
+
+.btn-tactile {
+  border-bottom-width: 4px;
+  transition: transform 0.12s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+.btn-tactile:active { transform: translateY(3px); border-bottom-width: 1px; }
+
+.text-shadow-lg { text-shadow: 0 4px 24px rgba(0,0,0,0.7); }
+
+/* Dice 3D cube */
+.dice-scene { perspective: 900px; }
+.dice-cube { position: relative; transform-style: preserve-3d; transition: transform 1.6s cubic-bezier(0.3,0.9,0.3,1); }
+.dice-face {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  border-radius: 16px; background: linear-gradient(145deg, #E5C05C, #C89B3C);
+  border: 2px solid #8a6a25; box-shadow: inset 0 0 24px rgba(0,0,0,0.25);
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: rgba(200,155,60,0.4); border-radius: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
