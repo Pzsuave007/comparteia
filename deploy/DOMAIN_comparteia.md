@@ -16,12 +16,14 @@ Apunta el dominio a la **IP pública de tu servidor** (averíguala con `curl ifc
 > La propagación tarda de 5 min a un par de horas.
 
 ## 2) Arranca la app (un solo puerto interno)
-Clona el proyecto en el home de tu usuario, por ejemplo `/home/comparteia/archivo-biblico`:
+Clona el repo `comparteia` en el home de tu usuario → queda en `/home/comparteia/comparteia`:
 ```bash
 # comprueba que el 8080 esté libre (si no imprime nada, está libre):
 sudo ss -ltnp | grep :8080
 
-cd /home/comparteia/archivo-biblico
+cd /home/comparteia
+git clone https://github.com/comparteia/comparteia.git
+cd comparteia
 cp deploy/backend.env.example backend/.env    # edita MONGO_URL, DB_NAME
 chmod +x deploy/build_and_run.sh
 PORT=8080 ./deploy/build_and_run.sh           # o usa el servicio systemd (recomendado, abajo)
@@ -30,7 +32,7 @@ PORT=8080 ./deploy/build_and_run.sh           # o usa el servicio systemd (recom
 ### Encender 24/7 con systemd (recomendado)
 ```bash
 sudo cp deploy/archivo.service /etc/systemd/system/archivo.service
-# el service ya viene con User=comparteia y ruta /home/comparteia/archivo-biblico
+# el service ya viene con User=comparteia y ruta /home/comparteia/comparteia
 sudo systemctl daemon-reload
 sudo systemctl enable --now archivo
 sudo systemctl status archivo

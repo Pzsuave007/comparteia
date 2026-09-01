@@ -5,9 +5,9 @@ After=network.target mongod.service
 [Service]
 Type=simple
 User=comparteia
-# Ruta donde clonaste el proyecto (ajusta si usas otra):
-WorkingDirectory=/home/comparteia/archivo-biblico/backend
-Environment=FRONTEND_BUILD_DIR=/home/comparteia/archivo-biblico/frontend/build
+# Ruta donde clonaste el repo "comparteia":
+WorkingDirectory=/home/comparteia/comparteia/backend
+Environment=FRONTEND_BUILD_DIR=/home/comparteia/comparteia/frontend/build
 Environment=PORT=8080
 # MONGO_URL / DB_NAME / CORS_ORIGINS se leen desde backend/.env
 ExecStart=/usr/bin/env uvicorn server:app --host 0.0.0.0 --port 8080 --workers 1
