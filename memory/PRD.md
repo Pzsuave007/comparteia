@@ -41,6 +41,15 @@ secret server-side verification, dramatic winner reveal. Bilingual (ES/EN) PER P
 - ✅ Live interactions (2026-06): emoji reactions floating on TV; "¡Yo sí lo sé!" predictions with TV reveal; "Consejo de exploradores" council voting (A/B/C/D) shown on TV + active phone; expedition sand-timer (30s, auto-timeout ends turn); honor scoreboard (correct answers) on winner screen.
 - ✅ Board game mode (2026-06): dice now MOVES a pawn on a shared map (24 exploration tiles + secret path + Temple). Tile types: character/location/event (choose candidate → verify), trap (answer to pass; wrong = move back 3), clue (free private clue), rest. Recovering all 3 pieces opens the secret path (anonymous vault 3/3); first pawn to reach the Temple wins → race. TV shows the live board with pawns; ambient music, sparkles, streak multiplier and vault preserved.
 - ✅ Seed: 10 characters, 10 locations, 10 events (AI illustrations), 41 bilingual questions.
+- ✅ Adventure map redesign (2026-06): replaced the grid-of-squares board (`BigBoard`) with a
+  full-screen illustrated parchment adventure map (`AdventureMap` in `Host.jsx`). Winding serpentine
+  trail (SVG dashed route) around an oval circuit; themed waypoint pins (character/location/event/trap/clue);
+  hidden Temple (golden token) at center, locked & greyed until 3 pieces found; secret branch path with
+  "❔" mystery tiles that reveal when secret_open. Players are explorer-medallion pawns with per-player
+  color + name; the pawn WALKS tile-by-tile along the trail (forward on dice, backward on trap) via a
+  stepping animation (`walkPath`/`loopSeq`) with CSS transitions. Roll/moving/clue/rest phases now use a
+  compact bottom-right HUD instead of a full-screen overlay so the walk stays visible.
+  Assets: AI-generated map background, explorer coin token, temple token.
 - ✅ Engine validated via deterministic tests (all dice branches, win, security/privacy, clues).
 
 ## Backlog / Remaining

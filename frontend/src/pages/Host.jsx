@@ -15,8 +15,12 @@ import { startAmbient, stopAmbient } from "@/sounds";
 
 const API = `${BACKEND}/api`;
 const RUINS = "https://images.unsplash.com/photo-1565799446045-5ba401561908";
-const MAP = "https://images.unsplash.com/photo-1608924066819-930edc42986a";
-const TEMPLE = "https://images.unsplash.com/photo-1767533427544-5f88d3fe4eed";
+const MAP = "https://static.prod-images.emergentagent.com/jobs/853e5b4e-0492-4560-99fd-a438ec12e4f4/images/9ffe6bbca9e10bec58c35c9519ea95ed9dd16362c8c5752053741024761ea98f.jpeg";
+const EXPLORER_TOKEN = "https://static.prod-images.emergentagent.com/jobs/853e5b4e-0492-4560-99fd-a438ec12e4f4/images/55b0238dc666b9d6289ee02bcf67ca08fe88d4974a83be411c3bfe69f6dae570.jpeg";
+const TEMPLE_TOKEN = "https://static.prod-images.emergentagent.com/jobs/853e5b4e-0492-4560-99fd-a438ec12e4f4/images/cc53fcd9f4291a5b4d3bc2a99abd1a05ae02a94fe1c3750044309fcd08068db7.jpeg";
+const TEMPLE = TEMPLE_TOKEN;
+
+const PLAYER_COLORS = ["#E5C05C", "#C05B3F", "#2E6F40", "#5B8FB9", "#B98BC9", "#D98E3A", "#4FB3A5", "#D46A9F"];
 
 const DICE_META = {
   1: { icon: Lock, es: "PISTA PRIVADA", en: "PRIVATE CLUE" },
@@ -30,36 +34,185 @@ const DICE_META = {
 const RANK_ICON = { explorer: "🧭", investigator: "🔎", archaeologist: "🏺" };
 const TILE_EMOJI = { character: "👤", location: "📍", event: "📜", trap: "⚠️", clue: "🔐", rest: "🏕️", path: "✨", temple: "🏛️", start: "🚩" };
 
-function BigBoard({ state }) {
-  const board = state.board || [];
-  const players = state.players || [];
-  const cols = 8;
-  const rows = [];
-  for (let i = 0; i < board.length; i += cols) {
-    rows.push(board.slice(i, i + cols).map((t, j) => ({ type: t, idx: i + j })));
+/* ----------------------- Adventure map geometry ----------------------- */
+function computeWaypoints(total, exploreEnd, temple) {
+  const cx = 50, cy = 50, rx = 42, ry = 36;
+  const pts = [];
+  const loopN = exploreEnd + 1;
+  for (let i = 0; i <= exploreEnd; i++) {
+    const ang = Math.PI / 2 + (2 * Math.PI * i / loopN);
+    pts[i] = { x: cx + rx * Math.cos(ang), y: cy + ry * Math.sin(ang) };
   }
+  const secStart = exploreEnd + 1;
+  const count = temple - secStart + 1;
+  const top = { x: cx, y: cy - ry + 4 };
+  const center = { x: cx, y: cy - 3 };
+  for (let k = 0; k < count; k++) {
+    const idx = secStart + k;
+    const t = count <= 1 ? 1 : k / (count - 1);
+    const bow = Math.sin(t * Math.PI) * 8;
+    pts[idx] = { x: top.x - bow, y: top.y + t * (center.y - top.y) };
+  }
+  return pts;
+}
+
+function loopSeq(from, to, n) {
+  const fwd = (((to - from) % n) + n) % n;
+  const seq = [];
+  if (fwd === 0) return seq;
+  if (fwd <= n - fwd) {
+    let cur = from;
+    for (let s = 0; s < fwd; s++) { cur = cur + 1 > n ? 1 : cur + 1; seq.push(cur); }
+  } else {
+    const back = n - fwd;
+    let cur = from;
+    for (let s = 0; s < back; s++) { cur = cur - 1 < 1 ? n : cur - 1; seq.push(cur); }
+  }
+  return seq;
+}
+
+function walkPath(from, to, exploreEnd) {
+  if (to > exploreEnd || from > exploreEnd) {
+    const seq = [];
+    const step = to >= from ? 1 : -1;
+    for (let i = from + step; step > 0 ? i <= to : i >= to; i += step) seq.push(i);
+    return seq;
+  }
+  return loopSeq(from, to, exploreEnd);
+}
+
+function pathD(pts, from, to, close) {
+  let d = "";
+  for (let i = from; i <= to; i++) {
+    if (!pts[i]) continue;
+    d += `${i === from ? "M" : "L"} ${pts[i].x} ${pts[i].y} `;
+  }
+  if (close) d += "Z";
+  return d;
+}
+
+function AdventureMap({ state }) {
+  const board = state.board || [];
+  const exploreEnd = state.explore_end || 24;
+  const temple = state.temple_index != null ? state.temple_index : board.length - 1;
+  const secretOpen = !!state.secret_open;
+  const players = state.players || [];
+  const curId = state.current_player?.id;
+  const moving = state.phase === "moving";
+
+  const pts = useMemo(() => computeWaypoints(board.length, exploreEnd, temple),
+    [board.length, exploreEnd, temple]);
+
+  const targetFor = (p) =>
+    (moving && p.id === curId && state.current?.to != null) ? state.current.to : (p.pos || 0);
+
+  const [disp, setDisp] = useState({});
+  const prev = useRef({});
+  const timers = useRef({});
+
+  const sig = JSON.stringify(players.map((p) => [p.id, targetFor(p)]));
+  useEffect(() => {
+    players.forEach((p) => {
+      const target = targetFor(p);
+      const was = prev.current[p.id];
+      if (was === undefined) { prev.current[p.id] = target; setDisp((d) => ({ ...d, [p.id]: target })); return; }
+      if (was === target) return;
+      const seq = walkPath(was, target, exploreEnd);
+      prev.current[p.id] = target;
+      if (timers.current[p.id]) clearInterval(timers.current[p.id]);
+      if (seq.length === 0) { setDisp((d) => ({ ...d, [p.id]: target })); return; }
+      let k = 0;
+      const stepFn = () => {
+        setDisp((d) => ({ ...d, [p.id]: seq[k] }));
+        k++;
+        if (k >= seq.length) { clearInterval(timers.current[p.id]); timers.current[p.id] = null; }
+      };
+      stepFn();
+      timers.current[p.id] = setInterval(stepFn, 430);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sig, exploreEnd]);
+
+  useEffect(() => () => { Object.values(timers.current).forEach((t) => t && clearInterval(t)); }, []);
+
+  const topIdx = Math.round((exploreEnd + 1) / 2);
+  const loopTrail = pathD(pts, 0, exploreEnd, true);
+  const secretTrail = `M ${pts[topIdx].x} ${pts[topIdx].y} ` + pathD(pts, exploreEnd + 1, temple, false).replace(/^M/, "L");
+
+  const colorOf = {};
+  players.forEach((p, i) => { colorOf[p.id] = PLAYER_COLORS[i % PLAYER_COLORS.length]; });
+
+  const groups = {};
+  players.forEach((p) => {
+    const idx = disp[p.id] != null ? disp[p.id] : (p.pos || 0);
+    (groups[idx] = groups[idx] || []).push(p);
+  });
+
   return (
-    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 lg:gap-4 px-6 pt-24 pb-8">
-      {rows.map((row, ri) => (
-        <div key={ri} className={`flex gap-3 lg:gap-4 ${ri % 2 === 1 ? "flex-row-reverse" : ""}`}>
-          {row.map(({ type, idx }) => {
-            const here = players.filter((p) => p.pos === idx);
-            const secret = idx > (state.explore_end || 24);
-            const locked = secret && !state.secret_open && type !== "temple";
-            return (
-              <div key={idx} className={`relative rounded-2xl flex items-center justify-center shrink-0 border-2 shadow-xl transition-all duration-500 ${type === "temple" ? "w-24 h-24 lg:w-28 lg:h-28 bg-gold/25 border-gold animate-pulse-gold" : "w-16 h-16 lg:w-24 lg:h-24 " + (locked ? "border-bronze/10 bg-black/50 opacity-25" : secret ? "border-gold/60 bg-gold/15" : "border-bronze/40 bg-charcoal/75")}`}>
-                <span className="text-3xl lg:text-5xl">{locked ? "·" : (TILE_EMOJI[type] || "·")}</span>
-                <span className="absolute bottom-1 right-1.5 text-[10px] text-sand/40 font-display">{idx}</span>
-                {here.length > 0 && (
-                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 flex -space-x-2">
-                    {here.map((p) => <span key={p.id} className="w-8 h-8 lg:w-9 lg:h-9 rounded-full bg-bronze border-2 border-gold text-sm flex items-center justify-center text-midnight font-bold shadow-lg animate-float">{p.name[0]}</span>)}
-                  </div>
-                )}
+    <div className="absolute inset-0 overflow-hidden">
+      <img src={MAP} alt="" className="absolute inset-0 w-full h-full object-cover" />
+      <div className="absolute inset-0 bg-gradient-to-b from-midnight/40 via-transparent to-midnight/55" />
+
+      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+        <path d={loopTrail} fill="none" stroke="#2a1c0e" strokeWidth="3.6" strokeLinejoin="round" opacity="0.55" vectorEffect="non-scaling-stroke" />
+        <path d={loopTrail} fill="none" stroke="#e7d3a1" strokeWidth="2.2" strokeLinejoin="round" opacity="0.85" vectorEffect="non-scaling-stroke" />
+        <path d={loopTrail} fill="none" stroke="#8a5a2b" strokeWidth="2.2" strokeDasharray="0.6 3.2" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+        <path d={secretTrail} fill="none" stroke={secretOpen ? "#E5C05C" : "#5a4a2e"} strokeWidth="2.4" strokeDasharray="3 3" strokeLinecap="round"
+          opacity={secretOpen ? 0.95 : 0.35} vectorEffect="non-scaling-stroke" className={secretOpen ? "animate-pulse" : ""} />
+      </svg>
+
+      {/* pins */}
+      {board.map((type, idx) => {
+        if (!pts[idx]) return null;
+        const isTemple = idx === temple;
+        const secret = idx > exploreEnd && !isTemple;
+        const locked = secret && !secretOpen;
+        const isStart = type === "start";
+        if (isTemple) {
+          return (
+            <div key={idx} className="absolute -translate-x-1/2 -translate-y-1/2 z-[6]" style={{ left: `${pts[idx].x}%`, top: `${pts[idx].y}%` }}>
+              <div className={`relative rounded-full overflow-hidden border-4 shadow-2xl ${secretOpen ? "border-gold animate-pulse-gold" : "border-bronze/40"}`}
+                style={{ width: "clamp(72px,9vw,140px)", height: "clamp(72px,9vw,140px)" }}>
+                <img src={TEMPLE_TOKEN} alt="temple" className={`w-full h-full object-cover ${secretOpen ? "" : "grayscale brightness-50"}`} />
+                {!secretOpen && <div className="absolute inset-0 flex items-center justify-center bg-midnight/50"><Lock className="w-7 h-7 text-sand/70" /></div>}
               </div>
-            );
-          })}
-        </div>
-      ))}
+              {secretOpen && <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap font-display text-gold text-sm tracking-widest">TEMPLO</div>}
+            </div>
+          );
+        }
+        return (
+          <div key={idx} className="absolute -translate-x-1/2 -translate-y-1/2 z-[4]" style={{ left: `${pts[idx].x}%`, top: `${pts[idx].y}%` }}>
+            <div className={`rounded-full flex items-center justify-center border-2 shadow-lg backdrop-blur-sm transition-all duration-500 ${isStart ? "border-emerald bg-emerald/25" : locked ? "border-bronze/20 bg-black/45 opacity-40" : "border-bronze/60 bg-charcoal/70"}`}
+              style={{ width: "clamp(34px,4vw,58px)", height: "clamp(34px,4vw,58px)" }}>
+              <span style={{ fontSize: "clamp(15px,1.9vw,26px)" }}>{locked ? "❔" : (TILE_EMOJI[type] || "·")}</span>
+            </div>
+          </div>
+        );
+      })}
+
+      {/* pawns */}
+      {players.map((p) => {
+        const idx = disp[p.id] != null ? disp[p.id] : (p.pos || 0);
+        if (!pts[idx]) return null;
+        const grp = groups[idx] || [];
+        const gi = grp.findIndex((x) => x.id === p.id);
+        const off = (gi - (grp.length - 1) / 2) * 4.2;
+        const active = p.id === curId;
+        const isWalking = active && moving;
+        return (
+          <div key={p.id} className="absolute -translate-x-1/2 -translate-y-1/2 z-10"
+            style={{ left: `calc(${pts[idx].x}% + ${off}%)`, top: `${pts[idx].y}%`, transition: "left 380ms ease-in-out, top 380ms ease-in-out" }}>
+            <div className={`relative flex flex-col items-center ${isWalking ? "animate-bounce" : "animate-float"}`}>
+              <div className={`rounded-full overflow-hidden border-[3px] shadow-2xl ${active ? "ring-4 ring-gold/70" : ""}`}
+                style={{ width: "clamp(38px,4.4vw,64px)", height: "clamp(38px,4.4vw,64px)", borderColor: colorOf[p.id] }}>
+                <img src={EXPLORER_TOKEN} alt={p.name} className="w-full h-full object-cover" />
+              </div>
+              <span className="mt-1 px-2 py-0.5 rounded-full text-[10px] lg:text-xs font-bold text-midnight shadow-md whitespace-nowrap max-w-[90px] truncate"
+                style={{ background: colorOf[p.id] }}>{p.name}</span>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -249,24 +402,42 @@ function GameStage({ state, hostLang, vaultPulse }) {
     </div>
   );
 
+  const lightPhases = ["roll", "moving", "clue_tile", "rest_tile"];
+  const isLight = lightPhases.includes(phase);
+
   let body = null;
+  let hud = null;
 
   if (phase === "moving") {
-    body = (<StageWrap><Dice value={cur.dice_value} size={200} /><div className="text-7xl mt-8">{TILE_EMOJI[cur.tile] || "✨"}</div><div className="font-display font-800 text-4xl text-parchment mt-3 text-center">{bi(hostLang, "AVANZA…", "MOVING…")}</div></StageWrap>);
-  }
-  if (phase === "clue_tile") {
-    body = (<StageWrap><Lock className="w-20 h-20 text-gold mb-4" /><h2 className="font-serif text-5xl text-gold">🔐 {bi(hostLang, "PISTA", "CLUE")}</h2><p className="text-sand/70 text-xl mt-4">{bi(hostLang, "Enviada al explorador", "Sent to the explorer")}</p></StageWrap>);
-  }
-  if (phase === "rest_tile") {
-    body = (<StageWrap><div className="text-9xl mb-6 animate-float">🏕️</div><h2 className="font-display font-800 text-5xl text-sand">{bi(hostLang, "CAMPAMENTO", "CAMP")}</h2></StageWrap>);
-  }
-
-  if (phase === "roll") {
-    body = (
-      <StageWrap>
-        <Dice value={null} size={200} />
-        <h2 className="font-serif text-4xl text-parchment mt-10">{bi(hostLang, "Lanza el dado en tu teléfono", "Roll the die on your phone")}</h2>
-      </StageWrap>
+    hud = (
+      <BottomHud>
+        <Dice value={cur.dice_value} size={92} />
+        <div className="text-center">
+          <div className="text-4xl">{TILE_EMOJI[cur.tile] || "✨"}</div>
+          <div className="font-display font-800 text-2xl lg:text-3xl text-parchment mt-1">{bi(hostLang, "AVANZA…", "MOVING…")}</div>
+        </div>
+      </BottomHud>
+    );
+  } else if (phase === "roll") {
+    hud = (
+      <BottomHud>
+        <Dice value={null} size={88} />
+        <h2 className="font-serif text-2xl lg:text-3xl text-parchment">{bi(hostLang, "Lanza el dado en tu teléfono", "Roll the die on your phone")}</h2>
+      </BottomHud>
+    );
+  } else if (phase === "clue_tile") {
+    hud = (
+      <BottomHud>
+        <Lock className="w-12 h-12 text-gold shrink-0" />
+        <div><h2 className="font-serif text-3xl text-gold">🔐 {bi(hostLang, "PISTA", "CLUE")}</h2><p className="text-sand/70 text-base">{bi(hostLang, "Enviada al explorador", "Sent to the explorer")}</p></div>
+      </BottomHud>
+    );
+  } else if (phase === "rest_tile") {
+    hud = (
+      <BottomHud>
+        <div className="text-5xl animate-float">🏕️</div>
+        <h2 className="font-display font-800 text-3xl text-sand">{bi(hostLang, "CAMPAMENTO", "CAMP")}</h2>
+      </BottomHud>
     );
   } else if (phase === "dice") {
     const meta = DICE_META[cur.dice_value] || DICE_META[1];
@@ -304,21 +475,30 @@ function GameStage({ state, hostLang, vaultPulse }) {
 
   return (
     <div className="relative min-h-screen overflow-hidden">
-      <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${MAP})` }} />
-      <BigBoard state={state} />
-      <div className="absolute inset-0" style={{ background: focus ? "rgba(11,19,32,0.9)" : "rgba(11,19,32,0.45)" }} />
+      <AdventureMap state={state} />
+      <div className="absolute inset-0 pointer-events-none transition-colors duration-500"
+        style={{ background: focus ? "rgba(11,19,32,0.9)" : isLight ? "rgba(11,19,32,0.26)" : "rgba(11,19,32,0.5)" }} />
       <Banner />
       <div className="absolute top-4 right-6 z-30">
         <ArchiveVault progress={state.max_progress || 0} pulse={vaultPulse} hostLang={hostLang} />
       </div>
       {phase === "feedback" && cur.was_correct && <SparkleBurst key={cur.question?.id} />}
       {body && <div className="relative z-10">{body}</div>}
+      {hud}
     </div>
   );
 }
 
 function StageWrap({ children }) {
   return <div className="min-h-screen flex flex-col items-center justify-center px-10 dice-scene animate-fade-in">{children}</div>;
+}
+
+function BottomHud({ children }) {
+  return (
+    <div className="absolute bottom-6 right-6 z-20 flex items-center gap-5 glass rounded-3xl px-7 py-5 border-bronze/40 shadow-2xl animate-fade-up dice-scene max-w-[46vw]">
+      {children}
+    </div>
+  );
 }
 
 function TravelStage({ cur, state, hostLang, pLang }) {

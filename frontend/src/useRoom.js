@@ -18,6 +18,7 @@ export function useRoom(code, role, pid) {
   const [connected, setConnected] = useState(false);
   const wsRef = useRef(null);
   const retryRef = useRef(null);
+  const deadRef = useRef(false);
 
   const connect = useCallback(() => {
     if (!code) return;
@@ -30,11 +31,12 @@ export function useRoom(code, role, pid) {
         if (msg.type === "state") setState(msg.state);
         else if (msg.type === "private") setPriv(msg.private);
         else if (msg.type === "reaction") setReaction({ emoji: msg.emoji, name: msg.name, id: Date.now() + Math.random() });
-        else if (msg.type === "error") setState({ error: msg.message });
+        else if (msg.type === "error") { deadRef.current = true; setState({ error: msg.message }); try { ws.close(); } catch (_) {} }
       } catch (_) {}
     };
     ws.onclose = () => {
       setConnected(false);
+      if (deadRef.current) return;
       retryRef.current = setTimeout(connect, 1500);
     };
     ws.onerror = () => { try { ws.close(); } catch (_) {} };
