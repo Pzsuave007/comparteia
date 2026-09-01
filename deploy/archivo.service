@@ -1,18 +1,18 @@
 [Unit]
-Description=Archivo Biblico Perdido (FastAPI single-port)
+Description=Archivo Biblico Perdido (comparteia.com)
 After=network.target mongod.service
 
 [Service]
 Type=simple
-# Ajusta la ruta a donde clonaste el proyecto:
-WorkingDirectory=/opt/archivo-biblico/backend
-Environment=FRONTEND_BUILD_DIR=/opt/archivo-biblico/frontend/build
+User=comparteia
+# Ruta donde clonaste el proyecto (ajusta si usas otra):
+WorkingDirectory=/home/comparteia/archivo-biblico/backend
+Environment=FRONTEND_BUILD_DIR=/home/comparteia/archivo-biblico/frontend/build
 Environment=PORT=8080
-# El backend lee MONGO_URL / DB_NAME / CORS_ORIGINS desde backend/.env
+# MONGO_URL / DB_NAME / CORS_ORIGINS se leen desde backend/.env
 ExecStart=/usr/bin/env uvicorn server:app --host 0.0.0.0 --port 8080 --workers 1
 Restart=always
 RestartSec=3
-User=www-data
 
 [Install]
 WantedBy=multi-user.target
