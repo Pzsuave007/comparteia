@@ -100,8 +100,11 @@ yarn build
 log "7/9 Entorno Python (venv)"
 python3 -m venv "${VENV}"
 "${VENV}/bin/pip" install --upgrade pip
-"${VENV}/bin/pip" install -r "${APP_DIR}/backend/requirements.txt"
-"${VENV}/bin/pip" install "uvicorn[standard]"
+# Dependencias MÍNIMAS reales del juego. Evita paquetes internos/no usados
+# (emergentintegrations, pandas, black, etc.) y compatibles con Python 3.9.
+"${VENV}/bin/pip" install \
+  "fastapi==0.110.1" "uvicorn[standard]==0.25.0" "motor==3.3.1" \
+  "pymongo==4.6.3" "pydantic>=2.6,<3" "python-dotenv>=1.0.1"
 id "${APP_USER}" >/dev/null 2>&1 && chown -R "${APP_USER}:${APP_USER}" "${APP_DIR}"
 
 log "8/9 Servicio systemd (24/7)"
