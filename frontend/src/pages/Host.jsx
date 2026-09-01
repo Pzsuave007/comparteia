@@ -32,28 +32,62 @@ const DICE_META = {
 };
 
 const RANK_ICON = { explorer: "🧭", investigator: "🔎", archaeologist: "🏺" };
-const TILE_EMOJI = { character: "👤", location: "📍", event: "📜", trap: "⚠️", clue: "🔐", rest: "🏕️", path: "✨", temple: "🏛️", start: "🚩" };
+const TILE_EMOJI = { character: "👤", location: "📍", event: "📜", trap: "⚠️", clue: "🔐", rest: "🏕️", path: "✨", temple: "🏛️", start: "🚩", surprise: "🎁" };
 
 /* ----------------------- Adventure map geometry ----------------------- */
-function computeWaypoints(total, exploreEnd, temple) {
-  const cx = 50, cy = 50, rx = 42, ry = 36;
-  const pts = [];
-  const loopN = exploreEnd + 1;
-  for (let i = 0; i <= exploreEnd; i++) {
-    const ang = Math.PI / 2 + (2 * Math.PI * i / loopN);
-    pts[i] = { x: cx + rx * Math.cos(ang), y: cy + ry * Math.sin(ang) };
+// Winding closed-loop trail (rounded, organic) with arc-length spaced tiles.
+function computeGeometry(exploreEnd, temple) {
+  const cx = 50, cy = 53, rx = 43, ry = 39, n = 3.8, amp = 0.085, waves = 6;
+  const sample = (t) => {
+    const theta = 2 * Math.PI * t + Math.PI / 2; // start at bottom
+    const c = Math.cos(theta), s = Math.sin(theta);
+    const ex = 2 / n;
+    const sx = Math.sign(c) * Math.pow(Math.abs(c), ex);
+    const sy = Math.sign(s) * Math.pow(Math.abs(s), ex);
+    const rr = 1 + amp * Math.sin(waves * theta);
+    return { x: cx + rx * rr * sx, y: cy + ry * rr * sy };
+  };
+  const M = 360;
+  const raw = [];
+  for (let i = 0; i < M; i++) raw.push(sample(i / M));
+  const cum = [0];
+  for (let i = 1; i <= M; i++) {
+    const a = raw[i % M], b = raw[i - 1];
+    cum[i] = cum[i - 1] + Math.hypot(a.x - b.x, a.y - b.y);
   }
+  const L = cum[M];
+  const at = (len) => {
+    len = ((len % L) + L) % L;
+    let lo = 0, hi = M;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (cum[mid] < len) lo = mid + 1; else hi = mid; }
+    const i = Math.max(1, lo);
+    const segLen = (cum[i] - cum[i - 1]) || 1;
+    const f = (len - cum[i - 1]) / segLen;
+    const a = raw[(i - 1) % M], b = raw[i % M];
+    return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f };
+  };
+  const loopN = exploreEnd + 1;
+  const pts = [];
+  for (let i = 0; i < loopN; i++) pts[i] = at(i * L / loopN);
+  let loopD = `M ${raw[0].x} ${raw[0].y} `;
+  for (let i = 1; i < M; i++) loopD += `L ${raw[i].x} ${raw[i].y} `;
+  loopD += "Z";
+  // secret branch entrance = loop tile nearest top-center
+  let eIdx = 0;
+  for (let i = 0; i < loopN; i++) if (pts[i].y < pts[eIdx].y) eIdx = i;
+  const entrance = pts[eIdx];
   const secStart = exploreEnd + 1;
   const count = temple - secStart + 1;
-  const top = { x: cx, y: cy - ry + 4 };
-  const center = { x: cx, y: cy - 3 };
+  const center = { x: cx, y: cy };
   for (let k = 0; k < count; k++) {
     const idx = secStart + k;
     const t = count <= 1 ? 1 : k / (count - 1);
-    const bow = Math.sin(t * Math.PI) * 8;
-    pts[idx] = { x: top.x - bow, y: top.y + t * (center.y - top.y) };
+    const bow = Math.sin(t * Math.PI) * 6;
+    pts[idx] = { x: entrance.x + (center.x - entrance.x) * t - bow, y: entrance.y + (center.y - entrance.y) * t };
   }
-  return pts;
+  let secretD = `M ${entrance.x} ${entrance.y} `;
+  for (let k = 0; k < count; k++) { const p = pts[secStart + k]; secretD += `L ${p.x} ${p.y} `; }
+  return { pts, loopD, secretD };
 }
 
 function loopSeq(from, to, n) {
@@ -81,16 +115,6 @@ function walkPath(from, to, exploreEnd) {
   return loopSeq(from, to, exploreEnd);
 }
 
-function pathD(pts, from, to, close) {
-  let d = "";
-  for (let i = from; i <= to; i++) {
-    if (!pts[i]) continue;
-    d += `${i === from ? "M" : "L"} ${pts[i].x} ${pts[i].y} `;
-  }
-  if (close) d += "Z";
-  return d;
-}
-
 function AdventureMap({ state }) {
   const board = state.board || [];
   const exploreEnd = state.explore_end || 24;
@@ -100,8 +124,8 @@ function AdventureMap({ state }) {
   const curId = state.current_player?.id;
   const moving = state.phase === "moving";
 
-  const pts = useMemo(() => computeWaypoints(board.length, exploreEnd, temple),
-    [board.length, exploreEnd, temple]);
+  const geo = useMemo(() => computeGeometry(exploreEnd, temple), [exploreEnd, temple]);
+  const pts = geo.pts;
 
   const targetFor = (p) =>
     (moving && p.id === curId && state.current?.to != null) ? state.current.to : (p.pos || 0);
@@ -135,12 +159,14 @@ function AdventureMap({ state }) {
 
   useEffect(() => () => { Object.values(timers.current).forEach((t) => t && clearInterval(t)); }, []);
 
-  const topIdx = Math.round((exploreEnd + 1) / 2);
-  const loopTrail = pathD(pts, 0, exploreEnd, true);
-  const secretTrail = `M ${pts[topIdx].x} ${pts[topIdx].y} ` + pathD(pts, exploreEnd + 1, temple, false).replace(/^M/, "L");
+  const loopTrail = geo.loopD;
+  const secretTrail = geo.secretD;
 
   const colorOf = {};
   players.forEach((p, i) => { colorOf[p.id] = PLAYER_COLORS[i % PLAYER_COLORS.length]; });
+
+  const opts = state.phase === "choose_stop" ? (state.current?.options || []) : [];
+  const optIdx = new Set(opts.map((o) => o.index));
 
   const groups = {};
   players.forEach((p) => {
@@ -154,11 +180,13 @@ function AdventureMap({ state }) {
       <div className="absolute inset-0 bg-gradient-to-b from-midnight/40 via-transparent to-midnight/55" />
 
       <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-        <path d={loopTrail} fill="none" stroke="#2a1c0e" strokeWidth="3.6" strokeLinejoin="round" opacity="0.55" vectorEffect="non-scaling-stroke" />
-        <path d={loopTrail} fill="none" stroke="#e7d3a1" strokeWidth="2.2" strokeLinejoin="round" opacity="0.85" vectorEffect="non-scaling-stroke" />
-        <path d={loopTrail} fill="none" stroke="#8a5a2b" strokeWidth="2.2" strokeDasharray="0.6 3.2" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-        <path d={secretTrail} fill="none" stroke={secretOpen ? "#E5C05C" : "#5a4a2e"} strokeWidth="2.4" strokeDasharray="3 3" strokeLinecap="round"
-          opacity={secretOpen ? 0.95 : 0.35} vectorEffect="non-scaling-stroke" className={secretOpen ? "animate-pulse" : ""} />
+        <path d={loopTrail} fill="none" stroke="#2a1c0e" strokeWidth="4.4" strokeLinejoin="round" opacity="0.5" vectorEffect="non-scaling-stroke" />
+        <path d={loopTrail} fill="none" stroke="#e7d3a1" strokeWidth="2.6" strokeLinejoin="round" opacity="0.85" vectorEffect="non-scaling-stroke" />
+        <path d={loopTrail} fill="none" stroke="#8a5a2b" strokeWidth="2.6" strokeDasharray="0.6 3.4" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+        {secretOpen && (
+          <path d={secretTrail} fill="none" stroke="#E5C05C" strokeWidth="3" strokeDasharray="3 3" strokeLinecap="round"
+            opacity="0.95" vectorEffect="non-scaling-stroke" className="animate-pulse" />
+        )}
       </svg>
 
       {/* pins */}
@@ -166,25 +194,28 @@ function AdventureMap({ state }) {
         if (!pts[idx]) return null;
         const isTemple = idx === temple;
         const secret = idx > exploreEnd && !isTemple;
-        const locked = secret && !secretOpen;
         const isStart = type === "start";
         if (isTemple) {
           return (
             <div key={idx} className="absolute -translate-x-1/2 -translate-y-1/2 z-[6]" style={{ left: `${pts[idx].x}%`, top: `${pts[idx].y}%` }}>
               <div className={`relative rounded-full overflow-hidden border-4 shadow-2xl ${secretOpen ? "border-gold animate-pulse-gold" : "border-bronze/40"}`}
-                style={{ width: "clamp(72px,9vw,140px)", height: "clamp(72px,9vw,140px)" }}>
+                style={{ width: "clamp(64px,8vw,128px)", height: "clamp(64px,8vw,128px)" }}>
                 <img src={TEMPLE_TOKEN} alt="temple" className={`w-full h-full object-cover ${secretOpen ? "" : "grayscale brightness-50"}`} />
-                {!secretOpen && <div className="absolute inset-0 flex items-center justify-center bg-midnight/50"><Lock className="w-7 h-7 text-sand/70" /></div>}
+                {!secretOpen && <div className="absolute inset-0 flex items-center justify-center bg-midnight/50"><Lock className="w-6 h-6 text-sand/70" /></div>}
               </div>
               {secretOpen && <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap font-display text-gold text-sm tracking-widest">TEMPLO</div>}
             </div>
           );
         }
+        if (secret && !secretOpen) return null;  // hidden until 3 pieces found
+        const isPlain = type === "path" || type === "rest" || type === "start";
+        const isOpt = optIdx.has(idx);
+        const content = isStart ? "🚩" : secret ? "✨" : isPlain ? String(idx) : (TILE_EMOJI[type] || "·");
         return (
           <div key={idx} className="absolute -translate-x-1/2 -translate-y-1/2 z-[4]" style={{ left: `${pts[idx].x}%`, top: `${pts[idx].y}%` }}>
-            <div className={`rounded-full flex items-center justify-center border-2 shadow-lg backdrop-blur-sm transition-all duration-500 ${isStart ? "border-emerald bg-emerald/25" : locked ? "border-bronze/20 bg-black/45 opacity-40" : "border-bronze/60 bg-charcoal/70"}`}
-              style={{ width: "clamp(34px,4vw,58px)", height: "clamp(34px,4vw,58px)" }}>
-              <span style={{ fontSize: "clamp(15px,1.9vw,26px)" }}>{locked ? "❔" : (TILE_EMOJI[type] || "·")}</span>
+            <div className={`rounded-full flex items-center justify-center border-2 shadow-md backdrop-blur-sm transition-all duration-300 ${isOpt ? "ring-4 ring-gold scale-125 animate-pulse z-[7]" : ""} ${isStart ? "border-emerald bg-emerald/40" : secret ? "border-gold/70 bg-gold/20" : isPlain ? "border-[#7a5a30] bg-parchment/90" : "border-bronze/70 bg-charcoal/85"}`}
+              style={{ width: "clamp(26px,3vw,46px)", height: "clamp(26px,3vw,46px)" }}>
+              <span className={isPlain && !isStart ? "font-display font-bold text-[#3a2a14]" : ""} style={{ fontSize: "clamp(12px,1.55vw,22px)", lineHeight: 1 }}>{content}</span>
             </div>
           </div>
         );
@@ -402,7 +433,7 @@ function GameStage({ state, hostLang, vaultPulse }) {
     </div>
   );
 
-  const lightPhases = ["roll", "moving", "clue_tile", "rest_tile"];
+  const lightPhases = ["roll", "moving", "clue_tile", "rest_tile", "choose_stop", "surprise_tile"];
   const isLight = lightPhases.includes(phase);
 
   let body = null;
@@ -416,6 +447,27 @@ function GameStage({ state, hostLang, vaultPulse }) {
           <div className="text-4xl">{TILE_EMOJI[cur.tile] || "✨"}</div>
           <div className="font-display font-800 text-2xl lg:text-3xl text-parchment mt-1">{bi(hostLang, "AVANZA…", "MOVING…")}</div>
         </div>
+      </BottomHud>
+    );
+  } else if (phase === "choose_stop") {
+    hud = (
+      <BottomHud>
+        <Dice value={cur.dice_value} size={88} />
+        <div>
+          <h2 className="font-serif text-3xl text-gold">{bi(hostLang, "¿Dónde te detienes?", "Where do you stop?")}</h2>
+          <p className="text-sand/70 text-base">{bi(hostLang, `${player?.name} decide su ruta…`, `${player?.name} is deciding their route…`)}</p>
+        </div>
+      </BottomHud>
+    );
+  } else if (phase === "surprise_tile") {
+    const s = cur.surprise || {};
+    const txt = s.kind === "forward" ? bi(hostLang, `¡Atajo! Avanzas ${s.amount}`, `Shortcut! Advance ${s.amount}`)
+      : s.kind === "back" ? bi(hostLang, `¡Ups! Retrocedes ${s.amount}`, `Oops! Back ${s.amount}`)
+      : bi(hostLang, "¡Tesoro! +2 honor", "Treasure! +2 honor");
+    hud = (
+      <BottomHud>
+        <div className="text-5xl animate-float">🎁</div>
+        <div><h2 className="font-display font-800 text-3xl text-terracotta">{bi(hostLang, "¡SORPRESA!", "SURPRISE!")}</h2><p className="text-parchment text-lg">{txt}</p></div>
       </BottomHud>
     );
   } else if (phase === "roll") {

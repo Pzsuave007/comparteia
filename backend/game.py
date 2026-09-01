@@ -12,10 +12,11 @@ import time
 CATEGORIES = ["character", "location", "event"]
 QUESTION_SECONDS = 30
 
-EXPLORE_END = 24     # exploration loop tiles 1..24
-SECRET_START = 25    # secret path tiles 25..29
-TEMPLE = 30          # temple tile index (win)
+EXPLORE_END = 40     # exploration loop tiles 1..40
+SECRET_START = 41    # secret path tiles 41..45
+TEMPLE = 46          # temple tile index (win)
 BACK_STEPS = 3       # trap penalty
+STOP_TYPES = {"character", "location", "event", "clue"}  # tiles worth stopping at
 
 
 # --------------------------------------------------------------------------
@@ -118,14 +119,24 @@ def current_player_id(room):
 
 
 def _gen_board():
-    types = (["character"] * 5 + ["location"] * 5 + ["event"] * 5 + ["trap"] * 4 + ["clue"] * 4)
-    random.shuffle(types)
-    board = [{"type": "start"}] + [{"type": t} for t in types]     # 0 .. 23
-    while len(board) <= EXPLORE_END:
-        board.append({"type": "rest"})
-    board = board[:EXPLORE_END + 1]
-    board += [{"type": "path"} for _ in range(SECRET_START, TEMPLE)]  # 25..29
-    board.append({"type": "temple"})                                  # 30
+    """Oval circuit with mostly plain step tiles and a few spaced situation tiles."""
+    loop_len = EXPLORE_END
+    specials = (["character"] * 3 + ["location"] * 3 + ["event"] * 3
+                + ["trap"] * 2 + ["clue"] * 2 + ["surprise"] * 3)  # 16 spaced situations
+    random.shuffle(specials)
+    tiles = ["path"] * loop_len  # loop indices 0..loop_len-1 -> board 1..loop_len
+    n = len(specials)
+    gap = loop_len / n
+    used = set()
+    for i, s in enumerate(specials):
+        idx = int(i * gap + random.randint(0, 1)) % loop_len
+        while idx in used:
+            idx = (idx + 1) % loop_len
+        used.add(idx)
+        tiles[idx] = s
+    board = [{"type": "start"}] + [{"type": t} for t in tiles]           # 0..EXPLORE_END
+    board += [{"type": "path"} for _ in range(SECRET_START, TEMPLE)]     # SECRET_START..TEMPLE-1
+    board.append({"type": "temple"})                                     # TEMPLE
     return board
 
 
@@ -137,6 +148,11 @@ def _move(pos, steps, has3):
     if has3:
         return min(pos + steps, TEMPLE)
     return ((pos - 1 + steps) % EXPLORE_END) + 1
+
+
+def _traversal(pos, steps, has3):
+    """Ordered list of tile indices stepped over (1..steps)."""
+    return [_move(pos, k, has3) for k in range(1, steps + 1)]
 
 
 # --------------------------------------------------------------------------
@@ -178,9 +194,37 @@ def roll_dice(room, content, pid):
     value = random.randint(1, 6)
     p = room["players"][pid]
     frm = p["pos"]
-    to = _move(frm, value, has_three(room, pid))
-    room["current"] = {"dice_value": value, "from": frm, "to": to,
-                       "tile": room["board"][to]["type"]}
+    has3 = has_three(room, pid)
+    seq = _traversal(frm, value, has3)
+    final = seq[-1]
+    options = []
+    for i, idx in enumerate(seq):
+        t = room["board"][idx]["type"]
+        is_final = (i + 1 == value)
+        if t in STOP_TYPES or is_final:
+            options.append({"index": idx, "step": i + 1, "type": t, "final": is_final})
+    room["current"] = {"dice_value": value, "from": frm, "final": final, "options": options}
+    # a real choice exists only if some situation can be reached before the final tile
+    non_final_sit = [o for o in options if not o["final"] and o["type"] in STOP_TYPES]
+    if non_final_sit:
+        room["phase"] = "choose_stop"
+    else:
+        room["current"]["to"] = final
+        room["current"]["tile"] = room["board"][final]["type"]
+        room["phase"] = "moving"
+
+
+def choose_stop(room, content, pid, step):
+    if room["phase"] != "choose_stop" or pid != current_player_id(room):
+        return
+    opts = room["current"].get("options", [])
+    chosen = next((o for o in opts if o["step"] == step), None)
+    if not chosen:
+        chosen = next((o for o in opts if o["final"]), opts[-1] if opts else None)
+    if not chosen:
+        return
+    room["current"]["to"] = chosen["index"]
+    room["current"]["tile"] = room["board"][chosen["index"]]["type"]
     room["phase"] = "moving"
 
 
@@ -221,9 +265,13 @@ def continue_turn(room, content, pid):
             clue = _grant_clue(room, content, room["private"][pid])
             room["current"]["private_result"] = {"type": "clue", "clue": clue, "granted": clue is not None}
             room["phase"] = "clue_tile"
+        elif tile == "surprise":
+            res = _resolve_surprise(room, p)
+            room["current"]["surprise"] = res
+            room["phase"] = "surprise_tile"
         else:  # rest / path / start
             room["phase"] = "rest_tile"
-    elif phase in ("feedback", "clue_tile", "rest_tile"):
+    elif phase in ("feedback", "clue_tile", "rest_tile", "surprise_tile"):
         _advance_player(room)
 
 
@@ -278,6 +326,22 @@ def submit_answer(room, content, pid, answer):
     room["phase"] = "feedback"
 
 
+def _resolve_surprise(room, p):
+    has3 = has_three(room, p["id"])
+    r = random.random()
+    if r < 0.4:
+        amt = random.randint(1, 2)
+        p["pos"] = _move(p["pos"], amt, has3)
+        return {"kind": "forward", "amount": amt}
+    elif r < 0.7:
+        amt = random.randint(1, 2)
+        p["pos"] = max(1, p["pos"] - amt)
+        return {"kind": "back", "amount": amt}
+    else:
+        p["honor"] = p.get("honor", 0) + 2
+        return {"kind": "honor", "amount": 2}
+
+
 def _grant_clue(room, content, priv):
     cats = CATEGORIES[:]
     random.shuffle(cats)
@@ -312,7 +376,7 @@ def _advance_player(room):
 def pass_turn(room, content, pid):
     if pid != current_player_id(room):
         return
-    if room["phase"] in ("moving", "choose_candidate", "clue_tile", "rest_tile"):
+    if room["phase"] in ("moving", "choose_candidate", "clue_tile", "rest_tile", "surprise_tile", "choose_stop"):
         _advance_player(room)
 
 
@@ -419,6 +483,11 @@ def public_current(room, content):
         out["help_requested"] = cur.get("help_requested", False)
     if phase in ("clue_tile",):
         out["result_type"] = "clue"
+    if phase == "choose_stop":
+        out["options"] = cur.get("options", [])
+        out["final"] = cur.get("final")
+    if phase == "surprise_tile":
+        out["surprise"] = cur.get("surprise")
     return out
 
 

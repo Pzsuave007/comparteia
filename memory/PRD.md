@@ -50,6 +50,16 @@ secret server-side verification, dramatic winner reveal. Bilingual (ES/EN) PER P
   stepping animation (`walkPath`/`loopSeq`) with CSS transitions. Roll/moving/clue/rest phases now use a
   compact bottom-right HUD instead of a full-screen overlay so the walk stays visible.
   Assets: AI-generated map background, explorer coin token, temple token.
+- ✅ Winding board + "choose where to stop" (2026-06): board is now a ~40-tile winding closed-loop
+  trail (arc-length spaced tiles over an organic squircle path in `computeGeometry`, Host.jsx) like a
+  treasure-hunt board — mostly numbered step tiles with spaced situation tiles (3 char/3 loc/3 event,
+  2 trap, 2 clue, 3 surprise). When a roll makes the pawn pass over situation tiles, the player CHOOSES
+  on the phone to stop at any passed situation (loses remaining steps) or advance the full roll
+  (`choose_stop` phase; TV highlights the reachable option tiles in gold). Traps are AVOIDED if merely
+  passed (only trigger when landed/stopped on). Surprise 🎁 tiles (on landing) give a random mini-event
+  (advance/retreat 1-2 / +2 honor). Secret path tiles + trail to the Temple stay HIDDEN until a player
+  recovers all 3 pieces, then appear (gold). Backend: `roll_dice` builds stop options, `choose_stop`,
+  `_resolve_surprise`, `surprise_tile` phase (game.py). Validated via engine simulation + TV/phone screenshots.
 - ✅ Engine validated via deterministic tests (all dice branches, win, security/privacy, clues).
 
 ## Backlog / Remaining

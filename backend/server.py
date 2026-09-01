@@ -160,6 +160,8 @@ async def handle_action(room, role, pid, msg):
         return
     if action == "roll":
         G.roll_dice(room, CONTENT, pid)
+    elif action == "choose_stop":
+        G.choose_stop(room, CONTENT, pid, msg.get("step"))
     elif action == "continue":
         G.continue_turn(room, CONTENT, pid)
     elif action == "choose_category":

@@ -20,7 +20,7 @@ const RANKS = [
   { id: "archaeologist", icon: "🏺", labelKey: "archaeologist", ageKey: "archaeologistAge" },
 ];
 const CAT_ICON = { character: User, location: MapPin, event: Scroll };
-const TILE_EMOJI = { character: "👤", location: "📍", event: "📜", trap: "⚠️", clue: "🔐", rest: "🏕️", path: "✨", temple: "🏛️", start: "🚩" };
+const TILE_EMOJI = { character: "👤", location: "📍", event: "📜", trap: "⚠️", clue: "🔐", rest: "🏕️", path: "✨", temple: "🏛️", start: "🚩", surprise: "🎁" };
 
 export default function Play() {
   const [session, setSession] = useState(() => {
@@ -292,6 +292,33 @@ function TurnView({ state, priv, send, lang, t }) {
       </div>
     );
   }
+  if (phase === "choose_stop") {
+    const opts = cur.options || [];
+    const situ = ["character", "location", "event", "clue", "trap", "surprise"];
+    return (
+      <div className="p-6 flex flex-col items-center min-h-[60vh] animate-fade-up">
+        <div className="mb-4"><Dice value={cur.dice_value} size={90} /></div>
+        <h2 className="font-serif text-2xl text-gold mb-1 text-center">{t("chooseStopTitle")}</h2>
+        <p className="text-sand/70 text-sm mb-6 text-center">{t("chooseStopSub")}</p>
+        <div className="grid gap-3 w-full max-w-sm">
+          {opts.map((o) => {
+            const showType = situ.includes(o.type);
+            return (
+              <button key={o.step} data-testid={`stop-opt-${o.step}`} onClick={() => send({ action: "choose_stop", step: o.step })}
+                className={`btn-tactile rounded-2xl py-4 px-5 flex items-center gap-3 text-left border ${o.final ? "bg-gold/15 border-gold text-parchment" : "glass border-bronze/40 text-parchment hover:border-gold"}`}>
+                <span className="text-3xl shrink-0">{TILE_EMOJI[o.type] || "✨"}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="font-serif text-lg">{o.final ? t("advanceFull") : t("stopHere")}</div>
+                  <div className="text-sand/60 text-xs truncate">{showType ? t("tile_" + o.type) + " · " : ""}{o.step} {t("tilesWord")}</div>
+                </div>
+                <ChevronRight className="w-5 h-5 text-bronze shrink-0" />
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
   if (phase === "moving") {
     return (
       <div className="p-6 text-center flex flex-col items-center justify-center min-h-[60vh] animate-fade-up">
@@ -341,6 +368,18 @@ function TurnView({ state, priv, send, lang, t }) {
         <div className="text-7xl mb-4 animate-float">🏕️</div>
         <h2 className="font-serif text-3xl text-sand mb-3">{t("restTitle")}</h2>
         <p className="text-sand/70 mb-8">{t("restBody")}</p>
+        <ContinueBtn send={send} t={t} label={t("endTurn")} />
+      </div>
+    );
+  }
+  if (phase === "surprise_tile") {
+    const s = cur.surprise || {};
+    const txt = s.kind === "forward" ? `${t("sfForward")} ${s.amount}` : s.kind === "back" ? `${t("sfBack")} ${s.amount}` : `${t("sfHonor")} +${s.amount}`;
+    return (
+      <div className="p-6 text-center flex flex-col items-center justify-center min-h-[60vh] animate-fade-up">
+        <div className="text-7xl mb-4 animate-float">🎁</div>
+        <h2 className="font-serif text-3xl text-terracotta mb-2">{t("surpriseTitle")}</h2>
+        <p className="text-parchment text-xl mb-8">{txt}</p>
         <ContinueBtn send={send} t={t} label={t("endTurn")} />
       </div>
     );
