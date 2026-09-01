@@ -3,12 +3,13 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import {
   Compass, Volume2, VolumeX, Pause, Play as PlayIcon, SkipForward,
-  RotateCcw, Lock, User, MapPin, Scroll, Wind, Target, Loader2, Users, Tv,
+  RotateCcw, Lock, User, MapPin, Scroll, Wind, Target, Loader2, Users, Tv, ScanLine,
 } from "lucide-react";
 import { tt, loc } from "@/i18n";
 import { useRoom, BACKEND } from "@/useRoom";
 import Dice from "@/components/Dice";
 import { play } from "@/sounds";
+import { QRCodeSVG } from "qrcode.react";
 
 const API = `${BACKEND}/api`;
 const RUINS = "https://images.unsplash.com/photo-1565799446045-5ba401561908";
@@ -133,9 +134,17 @@ function Lobby({ state, send }) {
           <h1 className="font-display font-800 text-5xl lg:text-6xl text-parchment leading-none text-shadow-lg">{tt("es", "appTitle")}</h1>
           <p className="font-serif italic text-2xl text-gold mt-4">{tt("es", "appSubtitle")}</p>
 
-          <div className="mt-12 glass rounded-3xl p-10 border-gold/40 inline-block w-fit animate-pulse-gold">
-            <p className="uppercase tracking-[0.3em] text-sand/80 text-sm mb-2">{tt("es", "roomCode")}</p>
-            <div data-testid="tv-room-code" className="font-display font-800 text-8xl lg:text-9xl text-gold tracking-widest leading-none">{state.code}</div>
+          <div className="mt-12 flex flex-wrap items-end gap-8">
+            <div className="glass rounded-3xl p-10 border-gold/40 inline-block w-fit animate-pulse-gold">
+              <p className="uppercase tracking-[0.3em] text-sand/80 text-sm mb-2">{tt("es", "roomCode")}</p>
+              <div data-testid="tv-room-code" className="font-display font-800 text-8xl lg:text-9xl text-gold tracking-widest leading-none">{state.code}</div>
+            </div>
+            <div className="glass rounded-3xl p-5 border-bronze/40 flex flex-col items-center gap-2 animate-fade-up">
+              <div className="bg-parchment p-3 rounded-2xl" data-testid="tv-join-qr">
+                <QRCodeSVG value={`${window.location.origin}/play?code=${state.code}`} size={148} bgColor="#F4EEDC" fgColor="#0B1320" level="M" />
+              </div>
+              <p className="text-sand/80 text-sm font-semibold flex items-center gap-1"><ScanLine className="w-4 h-4 text-bronze" /> {bi(state.host_language, "Escanea para unirte", "Scan to join")}</p>
+            </div>
           </div>
           <p className="mt-6 text-sand/80 text-lg">{tt("es", "joinAt")} · <span className="text-bronze font-semibold">{window.location.host}/play</span></p>
         </div>

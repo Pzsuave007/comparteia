@@ -41,8 +41,9 @@ export default function Play() {
 /* -------------------------------- JOIN FLOW -------------------------------- */
 function JoinFlow({ onJoined }) {
   const nav = useNavigate();
-  const [step, setStep] = useState(0);
-  const [code, setCode] = useState("");
+  const preCode = (new URLSearchParams(window.location.search).get("code") || "").replace(/\D/g, "").slice(0, 4);
+  const [step, setStep] = useState(preCode.length === 4 ? 1 : 0);
+  const [code, setCode] = useState(preCode);
   const [name, setName] = useState("");
   const [lang, setLang] = useState("es");
   const [rank, setRank] = useState("explorer");
