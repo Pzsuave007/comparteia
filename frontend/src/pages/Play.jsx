@@ -22,6 +22,13 @@ const RANKS = [
 ];
 const CAT_ICON = { character: User, location: MapPin, event: Scroll };
 const TILE_EMOJI = { character: "👤", location: "📍", event: "📜", trap: "⚠️", clue: "🔐", rest: "🏕️", step: "👣", path: "✨", temple: "🏛️", start: "🚩", surprise: "🎁" };
+// Safety net: never render a raw missing key like "tile_step" on screen.
+const TILE_FALLBACK = { step: "Terreno despejado / Open ground", path: "Camino secreto / Secret path", rest: "Campamento / Camp", start: "Inicio / Start" };
+function tileLabel(t, type) {
+  const v = t("tile_" + type);
+  if (v && v !== "tile_" + type) return v;
+  return TILE_FALLBACK[type] || "";
+}
 
 export default function Play() {
   const [session, setSession] = useState(() => {
@@ -438,7 +445,7 @@ function TurnView({ state, priv, send, lang, t }) {
                 <span className="text-3xl shrink-0">{TILE_EMOJI[o.type] || "✨"}</span>
                 <div className="flex-1 min-w-0">
                   <div className="font-serif text-lg">{o.final ? t("advanceFull") : t("stopHere")}</div>
-                  <div className="text-sand/60 text-xs truncate">{showType ? t("tile_" + o.type) + " · " : ""}{o.step} {t("tilesWord")}</div>
+                  <div className="text-sand/60 text-xs truncate">{showType ? tileLabel(t, o.type) + " · " : ""}{o.step} {t("tilesWord")}</div>
                 </div>
                 <ChevronRight className="w-5 h-5 text-bronze shrink-0" />
               </button>
@@ -454,7 +461,7 @@ function TurnView({ state, priv, send, lang, t }) {
         <div className="mb-6"><DicePair values={cur.dice_values} size={82} /></div>
         <p className="text-sand/70">{t("youAdvance")}</p>
         <div className="text-6xl my-4">{TILE_EMOJI[cur.tile] || "✨"}</div>
-        <p className="font-serif text-2xl text-parchment mb-8">{t("tile_" + cur.tile)}</p>
+        <p className="font-serif text-2xl text-parchment mb-8">{tileLabel(t, cur.tile)}</p>
         <ContinueBtn send={send} t={t} label={t("continue")} />
       </div>
     );
