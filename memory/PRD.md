@@ -95,3 +95,26 @@ secret server-side verification, dramatic winner reveal. Bilingual (ES/EN) PER P
   ganador +3 honor (DUEL_REWARD); fases 'duel'/'duel_result'. UI: DuelStage (TV), DuelView (teléfono).
 - Verificado por testing_agent (iteration_1: 9/9 core) + pruebas de motor. Cosmético pendiente:
   el banner de la TV muestra "TURNO DE <retador>" durante duel_result (no bloqueante).
+
+## 2026-06 · Ocultar respuesta en TV + dos dados + banco CSV + login admin
+- FIX secrecy: en la TV (`Host.jsx` FeedbackStage) cuando la respuesta es INCORRECTA ya NO se muestra la
+  respuesta correcta/explicación/cita — muestra "🔐 enviada en privado" (data-testid `tv-answer-hidden`).
+  La pantalla de ROBO también la oculta (`tv-answer-hidden-stolen`). Si es CORRECTA la TV sigue mostrándola.
+  El teléfono del jugador activo (`Play.jsx` FeedbackView) siempre ve la respuesta. Verificado por curl+screenshot.
+- FEATURE dos dados: `roll_dice` (game.py) tira 2×d6 → `dice_value`=suma(2-12), `dice_values`=[d1,d2];
+  `public_current` expone `dice_values`. Frontend: nuevo `DicePair` en `Dice.jsx`; Host y Play muestran 2 dados.
+- FEATURE banco de preguntas por CSV (admin): formato maestro
+  `question_id, entity_type, entity_id, difficulty, language, question, option_a..d, correct_answer, bible_reference, explanation, active`.
+  Endpoints (server.py): `GET /admin/questions/template`, `GET /admin/questions/export?category=`,
+  `POST /admin/questions/import_csv?replace_category=`. Import hace merge por `question_id` y por idioma
+  (una fila `es` y otra `en` con el mismo id se combinan). `replace_category` borra la categoría antes de importar.
+  UI: `CsvPanel` en Admin.jsx (Subir CSV / Descargar plantilla / Exportar actual + resumen y errores por fila).
+- IMPORT (2026-06): banco maestro de PERSONAJES en español = 150 preguntas (10 personajes × 5/5/5
+  explorer/investigator/archaeologist). Se eliminaron 25 preguntas de personaje del seed antiguo (duplicados).
+  DB ahora: 150 character + 20 location + 19 event + 10 general = 199. Inglés se adjuntará luego por question_id.
+- AUTH admin: login JWT (username/password de backend/.env: ADMIN_USERNAME/ADMIN_PASSWORD, JWT_SECRET).
+  Todos los `/api/admin/*` requieren Bearer token (excepto `/admin/login`). Front guarda token en localStorage `abp_admin_token`.
+  Credenciales en /app/memory/test_credentials.md.
+- ⚠️ NOTA DESPLIEGUE: `seed_data.py` todavía tiene las 25 preguntas antiguas de personaje. En un servidor
+  con DB vacía, `seed_if_empty` reinsertará el seed viejo (no las 150). Tras desplegar, re-subir el CSV maestro
+  desde /admin (o actualizar seed_data.py). Añadidos a requirements.prod.txt: pyjwt, python-multipart.

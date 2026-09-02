@@ -1,11 +1,17 @@
-from fastapi import FastAPI, APIRouter, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import (FastAPI, APIRouter, WebSocket, WebSocketDisconnect, HTTPException,
+                     Depends, Header, UploadFile, File)
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import csv
+import io
+import hmac
+import jwt
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from pydantic import BaseModel
 from typing import Optional
@@ -28,6 +34,116 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("archivo")
 
 CONTENT: Optional[G.Content] = None
+
+
+# --------------------------------------------------------------------------
+# Admin authentication (single admin, JWT bearer token)
+# --------------------------------------------------------------------------
+JWT_SECRET = os.environ["JWT_SECRET"]
+ADMIN_USERNAME = os.environ["ADMIN_USERNAME"]
+ADMIN_PASSWORD = os.environ["ADMIN_PASSWORD"]
+
+
+def make_admin_token(username: str) -> str:
+    payload = {
+        "sub": username, "role": "admin",
+        "exp": datetime.now(timezone.utc) + timedelta(days=30),
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+
+
+async def require_admin(authorization: str = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(401, "not_authenticated")
+    token = authorization[7:]
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(401, "token_expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(401, "invalid_token")
+    if payload.get("role") != "admin":
+        raise HTTPException(403, "forbidden")
+    return payload
+
+
+# --------------------------------------------------------------------------
+# Question CSV import/export helpers
+# Columns match the master bank format:
+# question_id, entity_type, entity_id, difficulty, language, question,
+# option_a, option_b, option_c, option_d, correct_answer, bible_reference,
+# explanation, active
+# --------------------------------------------------------------------------
+Q_CSV_COLUMNS = [
+    "question_id", "entity_type", "entity_id", "difficulty", "language", "question",
+    "option_a", "option_b", "option_c", "option_d", "correct_answer",
+    "bible_reference", "explanation", "active",
+]
+
+
+def parse_question_row(row: dict):
+    def g(*keys):
+        for k in keys:
+            v = row.get(k)
+            if v is not None and str(v).strip() != "":
+                return str(v).strip()
+        return ""
+    qid = g("question_id", "id")
+    if not qid:
+        return None, None, "falta question_id"
+    lang = (g("language") or "es").lower()[:2]
+    ca = (g("correct_answer") or "A").upper()[:1]
+    if ca not in ("A", "B", "C", "D"):
+        return None, None, f"correct_answer inválido: {ca}"
+    tr = {
+        "question": g("question"),
+        "answer_a": g("option_a", "answer_a"), "answer_b": g("option_b", "answer_b"),
+        "answer_c": g("option_c", "answer_c"), "answer_d": g("option_d", "answer_d"),
+        "explanation": g("explanation"),
+    }
+    active_raw = g("active").lower()
+    active = active_raw not in ("false", "0", "no")
+    doc = {
+        "id": qid,
+        "category": g("entity_type", "category") or "character",
+        "related_entity_id": g("entity_id", "related_entity_id"),
+        "rank": g("difficulty", "rank") or "explorer",
+        "correct_answer": ca,
+        "bible_reference": g("bible_reference"),
+        "active": active,
+        "translations": {lang: tr},
+    }
+    return doc, lang, None
+
+
+def question_to_rows(q: dict):
+    rows = []
+    for lang, tr in (q.get("translations") or {}).items():
+        rows.append({
+            "question_id": q.get("id", ""), "entity_type": q.get("category", ""),
+            "entity_id": q.get("related_entity_id", ""), "difficulty": q.get("rank", ""),
+            "language": lang, "question": tr.get("question", ""),
+            "option_a": tr.get("answer_a", ""), "option_b": tr.get("answer_b", ""),
+            "option_c": tr.get("answer_c", ""), "option_d": tr.get("answer_d", ""),
+            "correct_answer": q.get("correct_answer", ""),
+            "bible_reference": q.get("bible_reference", ""),
+            "explanation": tr.get("explanation", ""),
+            "active": str(q.get("active", True)),
+        })
+    return rows
+
+
+def _csv_response(header, rows, filename):
+    out = io.StringIO()
+    w = csv.DictWriter(out, fieldnames=header, quoting=csv.QUOTE_ALL)
+    w.writeheader()
+    for r in rows:
+        w.writerow(r)
+    return Response(
+        content="\ufeff" + out.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # --------------------------------------------------------------------------
@@ -255,14 +371,29 @@ async def update_player(code: str, pid: str, body: dict):
 # --------------------------------------------------------------------------
 # REST: admin content CRUD
 # --------------------------------------------------------------------------
+@api_router.post("/admin/login")
+async def admin_login(body: dict):
+    u = str(body.get("username", ""))
+    p = str(body.get("password", ""))
+    ok = hmac.compare_digest(u, ADMIN_USERNAME) and hmac.compare_digest(p, ADMIN_PASSWORD)
+    if not ok:
+        raise HTTPException(401, "invalid_credentials")
+    return {"token": make_admin_token(u), "username": u}
+
+
+@api_router.get("/admin/me")
+async def admin_me(admin=Depends(require_admin)):
+    return {"username": admin.get("sub"), "role": admin.get("role")}
+
+
 @api_router.get("/admin/entities")
-async def admin_entities(category: Optional[str] = None):
+async def admin_entities(category: Optional[str] = None, admin=Depends(require_admin)):
     q = {"category": category} if category else {}
     return await db.game_entities.find(q, {"_id": 0}).to_list(1000)
 
 
 @api_router.post("/admin/entities")
-async def admin_save_entity(body: dict):
+async def admin_save_entity(body: dict, admin=Depends(require_admin)):
     if not body.get("id") or not body.get("category"):
         raise HTTPException(400, "id_and_category_required")
     body.setdefault("active", True)
@@ -273,19 +404,19 @@ async def admin_save_entity(body: dict):
 
 
 @api_router.delete("/admin/entities/{category}/{eid}")
-async def admin_delete_entity(category: str, eid: str):
+async def admin_delete_entity(category: str, eid: str, admin=Depends(require_admin)):
     await db.game_entities.delete_one({"id": eid, "category": category})
     await load_content()
     return {"ok": True}
 
 
 @api_router.get("/admin/questions")
-async def admin_questions():
+async def admin_questions(admin=Depends(require_admin)):
     return await db.game_questions.find({}, {"_id": 0}).to_list(5000)
 
 
 @api_router.post("/admin/questions")
-async def admin_save_question(body: dict):
+async def admin_save_question(body: dict, admin=Depends(require_admin)):
     if not body.get("id"):
         raise HTTPException(400, "id_required")
     body.setdefault("active", True)
@@ -295,10 +426,78 @@ async def admin_save_question(body: dict):
 
 
 @api_router.delete("/admin/questions/{qid}")
-async def admin_delete_question(qid: str):
+async def admin_delete_question(qid: str, admin=Depends(require_admin)):
     await db.game_questions.delete_one({"id": qid})
     await load_content()
     return {"ok": True}
+
+
+@api_router.get("/admin/questions/template")
+async def admin_questions_template(admin=Depends(require_admin)):
+    sample = [{
+        "question_id": "david_explorer_001", "entity_type": "character", "entity_id": "david",
+        "difficulty": "explorer", "language": "es", "question": "¿A quién derrotó David?",
+        "option_a": "Goliat", "option_b": "Saúl", "option_c": "Faraón", "option_d": "Nabucodonosor",
+        "correct_answer": "A", "bible_reference": "1 Samuel 17:49",
+        "explanation": "David venció al gigante Goliat con una honda y una piedra.", "active": "True",
+    }]
+    return _csv_response(Q_CSV_COLUMNS, sample, "plantilla_preguntas.csv")
+
+
+@api_router.get("/admin/questions/export")
+async def admin_questions_export(category: Optional[str] = None, admin=Depends(require_admin)):
+    q = {"category": category} if category else {}
+    docs = await db.game_questions.find(q, {"_id": 0}).to_list(5000)
+    rows = []
+    for d in docs:
+        rows.extend(question_to_rows(d))
+    fname = f"preguntas_{category or 'todas'}.csv"
+    return _csv_response(Q_CSV_COLUMNS, rows, fname)
+
+
+@api_router.post("/admin/questions/import_csv")
+async def admin_questions_import_csv(
+    file: UploadFile = File(...),
+    replace_category: Optional[str] = None,
+    admin=Depends(require_admin),
+):
+    raw = await file.read()
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = raw.decode("latin-1")
+    reader = csv.DictReader(io.StringIO(text))
+    parsed, errors = [], []
+    for i, row in enumerate(reader, start=2):
+        doc, lang, err = parse_question_row(row)
+        if err:
+            errors.append(f"fila {i}: {err}")
+            continue
+        parsed.append((doc, lang))
+    if not parsed:
+        raise HTTPException(400, "no_valid_rows")
+
+    deleted = 0
+    if replace_category:
+        res = await db.game_questions.delete_many({"category": replace_category})
+        deleted = res.deleted_count
+
+    added = updated = 0
+    for doc, lang in parsed:
+        existing = None if replace_category else await db.game_questions.find_one({"id": doc["id"]})
+        setfields = {k: v for k, v in doc.items() if k != "translations"}
+        setfields[f"translations.{lang}"] = doc["translations"][lang]
+        await db.game_questions.update_one({"id": doc["id"]}, {"$set": setfields}, upsert=True)
+        if existing:
+            updated += 1
+        else:
+            added += 1
+    await load_content()
+    return {"added": added, "updated": updated, "deleted": deleted,
+            "rows": len(parsed), "errors": errors}
+
+
+
 
 
 app.include_router(api_router)
