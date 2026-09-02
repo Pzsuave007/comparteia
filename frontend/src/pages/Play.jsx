@@ -198,13 +198,18 @@ function PlayerGame({ session, onLeave }) {
 
   const isMyTurn = state.current_player?.id === pid;
   const winner = state.status === "finished";
+  const me = state.players?.find((p) => p.id === pid);
+  const myHonor = me?.honor ?? 0;
 
   return (
     <div className="relative min-h-screen grain flex flex-col bg-midnight">
       <div className="absolute inset-0 bg-gradient-to-b from-midnight2 to-midnight pointer-events-none" />
       <div className="relative z-10 flex items-center justify-between px-4 py-3 border-b border-bronze/20">
         <div className="flex items-center gap-2 text-bronze"><Compass className="w-5 h-5" /><span className="font-display text-sm tracking-widest">{code}</span></div>
-        <div className="text-sand/80 text-sm font-semibold truncate max-w-[45%]">{session.name}</div>
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-sand/80 text-sm font-semibold truncate max-w-[90px]">{session.name}</span>
+          <span data-testid="my-points" className="flex items-center gap-1 bg-gold/15 border border-gold/40 rounded-full px-2 py-0.5 text-gold text-xs font-bold shrink-0"><Trophy className="w-3.5 h-3.5" /> {myHonor}</span>
+        </div>
         <button data-testid="player-leave-btn" onClick={onLeave} className="text-sand/50 hover:text-incorrect"><LogOut className="w-4 h-4" /></button>
       </div>
 
@@ -216,7 +221,7 @@ function PlayerGame({ session, onLeave }) {
 
       <div className="relative z-10 flex-1 overflow-y-auto pb-24">
         {winner ? <WinnerPhone state={state} pid={pid} t={t} lang={lang} />
-          : tab === "notebook" ? <Notebook state={state} priv={priv} lang={lang} t={t} />
+          : tab === "notebook" ? <Notebook state={state} priv={priv} lang={lang} t={t} pid={pid} />
           : state.status === "lobby" ? <LobbyWait session={session} t={t} />
           : (state.phase === "duel" || state.phase === "duel_result") ? <DuelView state={state} send={send} pid={pid} lang={lang} t={t} />
           : isMyTurn ? <TurnView state={state} priv={priv} send={send} lang={lang} t={t} />
@@ -662,7 +667,7 @@ function FeedbackView({ cur, priv, lang, t, send }) {
 }
 
 /* ------------------------------ NOTEBOOK ------------------------------ */
-function Notebook({ state, priv, lang, t }) {
+function Notebook({ state, priv, lang, t, pid }) {
   const [cat, setCat] = useState("character");
   const tabs = [
     { id: "character", labelKey: "characters", icon: User }, { id: "location", labelKey: "locations", icon: MapPin },
@@ -675,10 +680,25 @@ function Notebook({ state, priv, lang, t }) {
   ];
   const foundEntity = (c) => (state.pools?.[c] || []).find((e) => e.id === priv?.recovered_ids?.[c]);
   const doneCount = pieces.filter((p) => priv?.discovered?.[p.cat]).length;
+  const me = state.players?.find((p) => p.id === pid);
+  const myHonor = me?.honor ?? 0;
   return (
     <div className="parchment min-h-full">
       <div className="p-5">
-        <div className="flex items-center gap-2 mb-4"><BookOpen className="w-6 h-6 text-terracotta" /><h2 className="font-serif text-2xl text-[#3a2a14]">{t("caseFile")}</h2></div>
+        <div className="flex items-center gap-3 mb-5 bg-white/50 border border-[#3a2a14]/20 rounded-2xl p-3" data-testid="notebook-identity">
+          {me?.avatar
+            ? <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-bronze shrink-0"><img src={avatarSrc(me.avatar)} alt={me?.name} className="w-full h-full object-cover" /></div>
+            : <div className="w-14 h-14 rounded-full bg-[#3a2a14]/10 flex items-center justify-center shrink-0"><BookOpen className="w-6 h-6 text-terracotta" /></div>}
+          <div className="min-w-0 flex-1">
+            <div className="font-serif text-xl text-[#3a2a14] truncate">{me?.name}</div>
+            <div className="text-xs text-[#6b5836] uppercase tracking-widest">{t("caseFile")}</div>
+          </div>
+          <div data-testid="notebook-points" className="flex items-center gap-1.5 bg-[#3a2a14] text-gold rounded-full px-3 py-1.5 shadow shrink-0">
+            <Trophy className="w-4 h-4" />
+            <span className="font-display font-bold text-lg leading-none">{myHonor}</span>
+            <span className="text-parchment/80 text-xs">{t("points")}</span>
+          </div>
+        </div>
 
         {/* Private progress — only this player can see it */}
         <div className="bg-white/50 border border-[#3a2a14]/20 rounded-2xl p-4 mb-5" data-testid="my-progress">

@@ -91,6 +91,7 @@ export const T = {
     sb_scroll: "📜 Pergamino ilegible",
     // notebook
     caseFile: "Mi expediente",
+    points: "puntos",
     characters: "Personajes", locations: "Lugares", events: "Acontecimientos", clues: "Pistas",
     noClues: "Aún no tienes pistas. ¡Saca un 1 en el dado!",
     unknown: "Desconocido",
@@ -259,6 +260,7 @@ export const T = {
     sb_blocked: "🏺 Path blocked",
     sb_scroll: "📜 Unreadable scroll",
     caseFile: "My case file",
+    points: "points",
     characters: "Characters", locations: "Locations", events: "Events", clues: "Clues",
     noClues: "You have no clues yet. Roll a 1!",
     unknown: "Unknown",
