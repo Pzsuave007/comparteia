@@ -32,7 +32,7 @@ const DICE_META = {
 };
 
 const RANK_ICON = { explorer: "🧭", investigator: "🔎", archaeologist: "🏺" };
-const TILE_EMOJI = { character: "👤", location: "📍", event: "📜", trap: "⚠️", clue: "🔐", rest: "🏕️", path: "✨", temple: "🏛️", start: "🚩", surprise: "🎁" };
+const TILE_EMOJI = { character: "👤", location: "📍", event: "📜", trap: "⚠️", clue: "🔐", rest: "🏕️", step: "👣", path: "✨", temple: "🏛️", start: "🚩", surprise: "🎁" };
 
 /* ----------------------- Adventure map geometry ----------------------- */
 // Serpentine closed-loop trail that winds through the map interior.
@@ -222,7 +222,7 @@ function AdventureMap({ state }) {
           );
         }
         if (secret && !secretOpen) return null;  // hidden until 3 pieces found
-        const isPlain = type === "path" || type === "rest";
+        const isPlain = type === "path" || type === "rest" || type === "step";
         const isOpt = optIdx.has(idx);
         if (isStart) {
           return (

@@ -20,7 +20,7 @@ const RANKS = [
   { id: "archaeologist", icon: "🏺", labelKey: "archaeologist", ageKey: "archaeologistAge" },
 ];
 const CAT_ICON = { character: User, location: MapPin, event: Scroll };
-const TILE_EMOJI = { character: "👤", location: "📍", event: "📜", trap: "⚠️", clue: "🔐", rest: "🏕️", path: "✨", temple: "🏛️", start: "🚩", surprise: "🎁" };
+const TILE_EMOJI = { character: "👤", location: "📍", event: "📜", trap: "⚠️", clue: "🔐", rest: "🏕️", step: "👣", path: "✨", temple: "🏛️", start: "🚩", surprise: "🎁" };
 
 export default function Play() {
   const [session, setSession] = useState(() => {

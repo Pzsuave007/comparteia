@@ -131,7 +131,7 @@ def _gen_board():
     for s in specials:
         tiles.append(s)
         for _ in range(random.randint(4, 6)):
-            tiles.append("path")
+            tiles.append("step")
     explore_end = len(tiles)                                    # loop tiles = board 1..explore_end
     board = [{"type": "start"}] + [{"type": t} for t in tiles]  # index 0 = start
     board += [{"type": "path"} for _ in range(SECRET_LEN)]      # hidden secret path
@@ -275,7 +275,7 @@ def continue_turn(room, content, pid):
             res = _resolve_surprise(room, p)
             room["current"]["surprise"] = res
             room["phase"] = "surprise_tile"
-        else:  # rest / path / start  -> try a 1v1 duel, else rest
+        else:  # rest / step / path / start  -> try a 1v1 duel, else rest
             if not _start_duel(room, content, pid):
                 room["phase"] = "rest_tile"
     elif phase in ("feedback", "clue_tile", "rest_tile", "surprise_tile", "duel_result"):
