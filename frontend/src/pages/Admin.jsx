@@ -254,7 +254,7 @@ function CsvPanel({ onImported }) {
         <label className="text-sm text-sand/70">Categoría:
           <select data-testid="csv-cat" value={cat} onChange={(e) => setCat(e.target.value)}
             className="ml-2 bg-charcoal/70 border border-bronze/30 rounded-lg px-3 py-1.5 text-parchment">
-            {["character", "location", "event"].map((c) => <option key={c} value={c}>{c}</option>)}
+            {["character", "location", "event", "general"].map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </label>
         <label className="text-sm text-sand/70 flex items-center gap-2 cursor-pointer">
