@@ -40,6 +40,7 @@ export const T = {
     waitTurn: "Espera tu turno, explorador",
     continue: "Continuar",
     endTurn: "Terminar turno",
+    autoContinue: "Continúa automáticamente en {s}s…",
     // dice results
     d1: "Pista privada", d2: "Personaje", d3: "Escoge uno",
     d4: "Lugar", d5: "Contratiempo", d6: "Acontecimiento",
@@ -210,6 +211,7 @@ export const T = {
     waitTurn: "Wait for your turn, explorer",
     continue: "Continue",
     endTurn: "End turn",
+    autoContinue: "Continues automatically in {s}s…",
     d1: "Private clue", d2: "Character", d3: "Choose one",
     d4: "Location", d5: "Setback", d6: "Event",
     clueOpportunity: "Private clue opportunity",

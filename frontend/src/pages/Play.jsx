@@ -461,7 +461,7 @@ function TurnView({ state, priv, send, lang, t }) {
         <Lock className="w-14 h-14 text-gold mb-4" />
         <h2 className="font-serif text-3xl text-gold mb-4">{t("clueUnlocked")}</h2>
         {r?.granted && r?.clue && <p className="text-parchment text-xl italic mb-8 px-4">"{r.clue[lang] || r.clue.es}"</p>}
-        <ContinueBtn send={send} t={t} label={t("endTurn")} />
+        <ContinueBtn send={send} t={t} label={t("endTurn")} autoSeconds={10} />
       </div>
     );
   }
@@ -471,7 +471,7 @@ function TurnView({ state, priv, send, lang, t }) {
         <div className="text-7xl mb-4 animate-float">🏕️</div>
         <h2 className="font-serif text-3xl text-sand mb-3">{t("restTitle")}</h2>
         <p className="text-sand/70 mb-8">{t("restBody")}</p>
-        <ContinueBtn send={send} t={t} label={t("endTurn")} />
+        <ContinueBtn send={send} t={t} label={t("endTurn")} autoSeconds={4} />
       </div>
     );
   }
@@ -483,19 +483,35 @@ function TurnView({ state, priv, send, lang, t }) {
         <div className="text-7xl mb-4 animate-float">🎁</div>
         <h2 className="font-serif text-3xl text-terracotta mb-2">{t("surpriseTitle")}</h2>
         <p className="text-parchment text-xl mb-8">{txt}</p>
-        <ContinueBtn send={send} t={t} label={t("endTurn")} />
+        <ContinueBtn send={send} t={t} label={t("endTurn")} autoSeconds={5} />
       </div>
     );
   }
   return null;
 }
 
-function ContinueBtn({ send, t, label }) {
+function ContinueBtn({ send, t, label, autoSeconds }) {
+  const [left, setLeft] = useState(autoSeconds || 0);
+  const firedRef = useRef(false);
+  useEffect(() => {
+    firedRef.current = false;
+    if (!autoSeconds) return;
+    setLeft(autoSeconds);
+    const iv = setInterval(() => setLeft((s) => (s <= 1 ? 0 : s - 1)), 1000);
+    const to = setTimeout(() => {
+      if (!firedRef.current) { firedRef.current = true; send({ action: "continue" }); }
+    }, autoSeconds * 1000);
+    return () => { clearInterval(iv); clearTimeout(to); };
+  }, [autoSeconds]);
+  const go = () => { if (firedRef.current) return; firedRef.current = true; send({ action: "continue" }); };
   return (
-    <button data-testid="continue-btn" onClick={() => send({ action: "continue" })}
-      className="btn-tactile bg-gold text-midnight border-[#a9822f] font-bold text-xl rounded-2xl px-10 py-4 hover:bg-bronze inline-flex items-center gap-2">
-      {label} <ChevronRight className="w-5 h-5" />
-    </button>
+    <div className="flex flex-col items-center gap-3">
+      <button data-testid="continue-btn" onClick={go}
+        className="btn-tactile bg-gold text-midnight border-[#a9822f] font-bold text-xl rounded-2xl px-10 py-4 hover:bg-bronze inline-flex items-center gap-2">
+        {label} <ChevronRight className="w-5 h-5" />
+      </button>
+      {autoSeconds ? <p className="text-sand/50 text-sm" data-testid="auto-continue-hint">{t("autoContinue").replace("{s}", left)}</p> : null}
+    </div>
   );
 }
 function PassBtn({ send, t }) {
