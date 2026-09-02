@@ -10,6 +10,7 @@ import { useRoom, BACKEND } from "@/useRoom";
 import Dice, { DicePair } from "@/components/Dice";
 import { play } from "@/sounds";
 import { EmojiBar, TimerBar, useCountdown, SparkleBurst } from "@/components/interactions";
+import { AVATARS, avatarSrc, avatarName } from "@/avatars";
 
 const API = `${BACKEND}/api`;
 const SKEY = "archivo_session";
@@ -39,6 +40,7 @@ function JoinFlow({ onJoined }) {
   const [name, setName] = useState("");
   const [lang, setLang] = useState("es");
   const [rank, setRank] = useState("explorer");
+  const [avatar, setAvatar] = useState("");
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
   const t = useT(lang);
@@ -46,8 +48,8 @@ function JoinFlow({ onJoined }) {
   const doJoin = async () => {
     setLoading(true); setErr("");
     try {
-      const res = await axios.post(`${API}/rooms/join`, { code, name, language: lang, rank });
-      onJoined({ code: res.data.code, pid: res.data.player_id, lang, rank, name });
+      const res = await axios.post(`${API}/rooms/join`, { code, name, language: lang, rank, avatar });
+      onJoined({ code: res.data.code, pid: res.data.player_id, lang, rank, name, avatar });
     } catch (e) { setErr(t("enterCode")); setStep(0); } finally { setLoading(false); }
   };
 
@@ -100,7 +102,7 @@ function JoinFlow({ onJoined }) {
             <h2 className="font-serif text-3xl text-parchment mb-6">{t("chooseRank")}</h2>
             <div className="grid gap-4">
               {RANKS.map((r) => (
-                <button key={r.id} data-testid={`join-rank-${r.id}`} onClick={() => { setRank(r.id); play("page"); setStep(4); }}
+                <button key={r.id} data-testid={`join-rank-${r.id}`} onClick={() => { setRank(r.id); setAvatar(""); play("page"); setStep(4); }}
                   className="btn-tactile glass border-bronze/40 rounded-2xl py-5 px-6 flex items-center gap-4 text-left hover:border-gold">
                   <span className="text-4xl">{r.icon}</span>
                   <div><div className="font-serif text-2xl text-parchment">{t(r.labelKey)}</div><div className="text-sand/70 text-sm">{t(r.ageKey)}</div></div>
@@ -110,13 +112,35 @@ function JoinFlow({ onJoined }) {
           </div>
         )}
         {step === 4 && (
+          <div className="animate-fade-up">
+            <h2 className="font-serif text-3xl text-parchment mb-2">{t("chooseAvatar")}</h2>
+            <p className="text-sand/60 text-sm mb-6">{t("chooseAvatarSub")}</p>
+            <div className="grid grid-cols-3 gap-3">
+              {(AVATARS[rank] || []).map((a) => (
+                <button key={a.id} data-testid={`join-avatar-${a.id}`}
+                  onClick={() => { setAvatar(a.id); play("page"); setStep(5); }}
+                  className={`btn-tactile rounded-2xl overflow-hidden border-2 transition-all ${avatar === a.id ? "border-gold ring-2 ring-gold scale-105" : "border-bronze/40 hover:border-gold"}`}>
+                  <div className="aspect-square overflow-hidden bg-charcoal">
+                    <img src={avatarSrc(a.id)} alt={a.name[lang] || a.name.es} className="w-full h-full object-cover" loading="lazy" />
+                  </div>
+                  <div className="px-1 py-1.5 bg-charcoal/90 text-parchment text-[10px] leading-tight truncate">{a.name[lang] || a.name.es}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {step === 5 && (
           <div className="animate-fade-up text-center flex-1 flex flex-col justify-center">
-            <div className="text-6xl mb-6">{RANKS.find((r) => r.id === rank)?.icon}</div>
-            <h2 className="font-serif text-3xl text-gold mb-2">{name}</h2>
-            <p className="text-sand/70 mb-10">{t(rank)} · {lang === "es" ? "🇪🇸" : "🇺🇸"}</p>
+            <div className="w-28 h-28 mx-auto mb-5 rounded-full overflow-hidden border-4 border-gold shadow-xl">
+              <img src={avatarSrc(avatar)} alt={name} className="w-full h-full object-cover" />
+            </div>
+            <h2 className="font-serif text-3xl text-gold mb-1">{name}</h2>
+            <p className="text-parchment/90 text-sm mb-1">{avatarName(avatar, lang)}</p>
+            <p className="text-sand/70 mb-8">{t(rank)} · {lang === "es" ? "🇪🇸" : "🇺🇸"}</p>
             <PrimaryBtn testid="join-confirm-btn" disabled={loading} onClick={doJoin}>
               {loading ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : t("ready")}
             </PrimaryBtn>
+            <button data-testid="join-change-avatar" onClick={() => setStep(4)} className="mt-4 text-sand/50 hover:text-bronze underline underline-offset-4 text-sm">{t("changeAvatar")}</button>
           </div>
         )}
       </div>
@@ -215,7 +239,9 @@ function LobbyWait({ session, t }) {
   const r = RANKS.find((x) => x.id === session.rank);
   return (
     <div className="p-8 text-center flex flex-col items-center justify-center min-h-[60vh] animate-fade-up">
-      <div className="text-7xl mb-6 animate-float">{r?.icon}</div>
+      {session.avatar
+        ? <div className="w-28 h-28 mb-6 rounded-full overflow-hidden border-4 border-gold shadow-xl animate-float"><img src={avatarSrc(session.avatar)} alt={session.name} className="w-full h-full object-cover" /></div>
+        : <div className="text-7xl mb-6 animate-float">{r?.icon}</div>}
       <h2 className="font-serif text-3xl text-gold">{session.name}</h2>
       <p className="text-parchment mt-2">{t(session.rank)} · {session.lang === "es" ? "🇪🇸 Español" : "🇺🇸 English"}</p>
       <div className="mt-10 flex items-center gap-2 text-sand/70"><Loader2 className="w-5 h-5 animate-spin" /> {t("waitingHost")}</div>

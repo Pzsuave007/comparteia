@@ -321,6 +321,7 @@ class JoinRoom(BaseModel):
     name: str
     language: str = "es"
     rank: str = "explorer"
+    avatar: str = ""
 
 
 @api_router.get("/")
@@ -347,7 +348,7 @@ async def join_room(body: JoinRoom):
     room = G.ROOMS.get(body.code)
     if not room:
         raise HTTPException(404, "room_not_found")
-    pid = G.add_player(room, body.name.strip()[:20] or "Jugador", body.language, body.rank)
+    pid = G.add_player(room, body.name.strip()[:20] or "Jugador", body.language, body.rank, body.avatar)
     await broadcast(body.code)
     return {"code": body.code, "player_id": pid}
 

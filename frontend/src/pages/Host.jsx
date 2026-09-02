@@ -12,6 +12,7 @@ import { play } from "@/sounds";
 import { QRCodeSVG } from "qrcode.react";
 import { ReactionOverlay, TimerBar, useCountdown, ArchiveVault, SparkleBurst } from "@/components/interactions";
 import { startAmbient, stopAmbient } from "@/sounds";
+import { avatarSrc } from "@/avatars";
 
 const API = `${BACKEND}/api`;
 const RUINS = "https://images.unsplash.com/photo-1565799446045-5ba401561908";
@@ -265,7 +266,7 @@ function AdventureMap({ state }) {
             <div className={`relative flex flex-col items-center ${isWalking ? "animate-bounce" : "animate-float"}`}>
               <div className={`rounded-full overflow-hidden border-[3px] shadow-2xl ${active ? "ring-4 ring-gold/70" : ""}`}
                 style={{ width: "clamp(30px,3.2vw,50px)", height: "clamp(30px,3.2vw,50px)", borderColor: colorOf[p.id] }}>
-                <img src={EXPLORER_TOKEN} alt={p.name} className="w-full h-full object-cover" />
+                <img src={p.avatar ? avatarSrc(p.avatar) : EXPLORER_TOKEN} alt={p.name} className="w-full h-full object-cover" />
               </div>
               <span className="mt-1 px-2 py-0.5 rounded-full text-[10px] lg:text-xs font-bold text-midnight shadow-md whitespace-nowrap max-w-[90px] truncate"
                 style={{ background: colorOf[p.id] }}>{p.name}</span>
@@ -445,7 +446,9 @@ function Lobby({ state, send }) {
               <div className="grid grid-cols-2 gap-3">
                 {state.players.map((p) => (
                   <div key={p.id} data-testid={`lobby-player-${p.id}`} className="flex items-center gap-3 bg-midnight2/60 rounded-2xl px-4 py-3 border border-bronze/20 animate-fade-up">
-                    <span className="text-3xl">{RANK_ICON[p.rank]}</span>
+                    {p.avatar
+                      ? <div className="w-11 h-11 rounded-full overflow-hidden border-2 border-bronze/50 shrink-0"><img src={avatarSrc(p.avatar)} alt={p.name} className="w-full h-full object-cover" /></div>
+                      : <span className="text-3xl">{RANK_ICON[p.rank]}</span>}
                     <div className="min-w-0">
                       <div className="font-serif text-lg text-parchment truncate">{p.name}</div>
                       <div className="text-xs text-sand/60">{p.language === "es" ? "🇪🇸" : "🇺🇸"} {tt("es", p.rank)}</div>

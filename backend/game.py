@@ -104,10 +104,10 @@ def create_room(host_language="bilingual", show_translation=True):
     return room
 
 
-def add_player(room, name, language="es", rank="explorer"):
+def add_player(room, name, language="es", rank="explorer", avatar=""):
     pid = "p_" + "".join(random.choices(string.ascii_lowercase + string.digits, k=8))
     room["players"][pid] = {
-        "id": pid, "name": name, "language": language, "rank": rank,
+        "id": pid, "name": name, "language": language, "rank": rank, "avatar": avatar,
         "connected": True, "ready": True, "honor": 0, "streak": 0, "pos": 0,
     }
     room["private"][pid] = new_private()
@@ -668,6 +668,7 @@ def public_state(room, content):
             continue
         players.append({"id": p["id"], "name": p["name"], "rank": p["rank"],
                         "language": p["language"], "connected": p["connected"],
+                        "avatar": p.get("avatar", ""),
                         "honor": p.get("honor", 0), "pos": p.get("pos", 0)})
     cpid = current_player_id(room) if room["status"] == "playing" else None
     cur_player = room["players"].get(cpid) if cpid else None
