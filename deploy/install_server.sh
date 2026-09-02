@@ -16,6 +16,12 @@ echo ">> copiar backend a $PROD"
 cp "$REPO"/backend/*.py "$PROD"/
 [ -f "$PROD/.env" ] || cp "$REPO/deploy/backend.env.production.example" "$PROD/.env"
 
+# asegurar claves nuevas en el .env existente (idempotente, no sobreescribe valores ya puestos)
+ensure_env() { grep -q "^$1=" "$PROD/.env" 2>/dev/null || printf '\n%s=%s\n' "$1" "$2" >> "$PROD/.env"; }
+ensure_env JWT_SECRET "07626e42ad11facb2a96f503acdf41325fa36968b317e111658831b1def7f203"
+ensure_env ADMIN_USERNAME "pzsuave"
+ensure_env ADMIN_PASSWORD "MXmedia007!"
+
 echo ">> compilar frontend (mismo origen)"
 cd "$REPO/frontend"
 printf 'REACT_APP_BACKEND_URL=\n' > .env.production.local

@@ -39,9 +39,9 @@ CONTENT: Optional[G.Content] = None
 # --------------------------------------------------------------------------
 # Admin authentication (single admin, JWT bearer token)
 # --------------------------------------------------------------------------
-JWT_SECRET = os.environ["JWT_SECRET"]
-ADMIN_USERNAME = os.environ["ADMIN_USERNAME"]
-ADMIN_PASSWORD = os.environ["ADMIN_PASSWORD"]
+JWT_SECRET = os.environ.get("JWT_SECRET", "07626e42ad11facb2a96f503acdf41325fa36968b317e111658831b1def7f203")
+ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "pzsuave")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "MXmedia007!")
 
 
 def make_admin_token(username: str) -> str:
