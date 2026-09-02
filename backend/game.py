@@ -18,6 +18,7 @@ BACK_STEPS = 3       # trap penalty
 STEAL_WINDOW = 5     # seconds before deadline when stealing opens
 STEAL_REWARD = 3     # honor gained on a successful steal
 STEAL_PENALTY = 1    # honor lost on a failed steal
+DUEL_REWARD = 3      # honor for the duel winner
 STOP_TYPES = {"character", "location", "event", "clue"}  # tiles worth stopping at
 
 
@@ -193,7 +194,9 @@ def new_game(room, content):
 def roll_dice(room, content, pid):
     if room["phase"] != "roll" or pid != current_player_id(room):
         return
-    value = random.randint(1, 6)
+    d1 = random.randint(1, 6)
+    d2 = random.randint(1, 6)
+    value = d1 + d2
     p = room["players"][pid]
     frm = p["pos"]
     has3 = has_three(room, pid)
@@ -205,7 +208,7 @@ def roll_dice(room, content, pid):
         is_final = (i + 1 == value)
         if t in STOP_TYPES or is_final:
             options.append({"index": idx, "step": i + 1, "type": t, "final": is_final})
-    room["current"] = {"dice_value": value, "from": frm, "final": final, "options": options}
+    room["current"] = {"dice_value": value, "dice_values": [d1, d2], "from": frm, "final": final, "options": options}
     # a real choice exists only if some situation can be reached before the final tile
     non_final_sit = [o for o in options if not o["final"] and o["type"] in STOP_TYPES]
     if non_final_sit:
@@ -272,10 +275,80 @@ def continue_turn(room, content, pid):
             res = _resolve_surprise(room, p)
             room["current"]["surprise"] = res
             room["phase"] = "surprise_tile"
-        else:  # rest / path / start
-            room["phase"] = "rest_tile"
-    elif phase in ("feedback", "clue_tile", "rest_tile", "surprise_tile"):
+        else:  # rest / path / start  -> try a 1v1 duel, else rest
+            if not _start_duel(room, content, pid):
+                room["phase"] = "rest_tile"
+    elif phase in ("feedback", "clue_tile", "rest_tile", "surprise_tile", "duel_result"):
         _advance_player(room)
+    elif phase == "duel":
+        _resolve_duel(room)
+
+
+def _start_duel(room, content, pid):
+    order = room["order"]
+    connected = [q for q in order if room["players"].get(q, {}).get("connected", True)]
+    if len(connected) < 3:
+        return False  # need challenger + opponent + at least one voter
+    others = [q for q in connected if q != pid]
+    opp = random.choice(others)
+    challenger = room["players"][pid]
+    opponent = room["players"][opp]
+    priv = room["private"][pid]
+    q = content.pick_question("general", None, challenger["rank"], priv["seen_questions"])
+    priv["seen_questions"].append(q["id"])
+    room["current"] = {
+        "phase_purpose": "duel",
+        "challenger": pid, "challenger_name": challenger["name"],
+        "opponent": opp, "opponent_name": opponent["name"],
+        "question": {"id": q["id"], "category": q["category"], "translations": q["translations"]},
+        "correct_answer": q["correct_answer"], "bible_reference": q["bible_reference"],
+        "duel_answers": {}, "duel_votes": {}, "deadline": time.time() + QUESTION_SECONDS,
+    }
+    room["phase"] = "duel"
+    return True
+
+
+def duel_answer(room, content, pid, answer):
+    if room["phase"] != "duel":
+        return
+    cur = room["current"]
+    if pid not in (cur.get("challenger"), cur.get("opponent")):
+        return
+    if answer in ("A", "B", "C", "D"):
+        cur.setdefault("duel_answers", {})[pid] = answer
+
+
+def duel_vote(room, content, pid, target):
+    if room["phase"] != "duel":
+        return
+    cur = room["current"]
+    if pid in (cur.get("challenger"), cur.get("opponent")):
+        return
+    if target not in (cur.get("challenger"), cur.get("opponent")):
+        return
+    cur.setdefault("duel_votes", {})[pid] = target
+    eligible = [q for q in room["order"]
+                if q not in (cur["challenger"], cur["opponent"])
+                and room["players"].get(q, {}).get("connected", True)]
+    if eligible and len(cur["duel_votes"]) >= len(eligible):
+        _resolve_duel(room)
+
+
+def _resolve_duel(room):
+    cur = room["current"]
+    ch, op = cur["challenger"], cur["opponent"]
+    counts = {ch: 0, op: 0}
+    for t in cur.get("duel_votes", {}).values():
+        if t in counts:
+            counts[t] += 1
+    winner = ch if counts[ch] > counts[op] else (op if counts[op] > counts[ch] else None)
+    if winner:
+        room["players"][winner]["honor"] = room["players"][winner].get("honor", 0) + DUEL_REWARD
+    cur["duel_winner"] = winner
+    cur["duel_winner_name"] = room["players"][winner]["name"] if winner else None
+    cur["duel_counts"] = {"challenger": counts[ch], "opponent": counts[op]}
+    cur["duel_reward"] = DUEL_REWARD
+    room["phase"] = "duel_result"
 
 
 def choose_candidate(room, content, pid, candidate_id):
@@ -410,9 +483,34 @@ def _grant_clue(room, content, priv):
 def _advance_player(room):
     if not room["order"]:
         return
-    room["turn_index"] = (room["turn_index"] + 1) % len(room["order"])
+    n = len(room["order"])
+    for _ in range(n):
+        room["turn_index"] = (room["turn_index"] + 1) % n
+        pid = room["order"][room["turn_index"]]
+        if room["players"].get(pid, {}).get("connected", True):
+            break
     room["phase"] = "roll"
     room["current"] = {}
+
+
+def handle_disconnect(room, pid):
+    """Keep the game moving when someone leaves so it never freezes."""
+    if room.get("status") != "playing":
+        return
+    phase = room.get("phase")
+    if phase == "duel":
+        cur = room["current"]
+        if pid in (cur.get("challenger"), cur.get("opponent")):
+            _resolve_duel(room)          # a contender left -> resolve now
+            return
+        eligible = [q for q in room["order"]
+                    if q not in (cur.get("challenger"), cur.get("opponent"))
+                    and room["players"].get(q, {}).get("connected", True)]
+        if not eligible:                 # no voters left -> resolve
+            _resolve_duel(room)
+        return
+    if current_player_id(room) == pid and not room["players"].get(pid, {}).get("connected", True):
+        _advance_player(room)
 
 
 def pass_turn(room, content, pid):
@@ -456,6 +554,7 @@ def skip_player(room):
 
 
 def remove_player(room, pid):
+    was_current = (room.get("status") == "playing" and current_player_id(room) == pid)
     room["players"].pop(pid, None)
     room["private"].pop(pid, None)
     if pid in room["order"]:
@@ -465,6 +564,11 @@ def remove_player(room, pid):
             room["turn_index"] -= 1
         if room["order"]:
             room["turn_index"] %= len(room["order"])
+    if was_current and room["order"]:
+        # the removed player was mid-turn -> reset to a clean roll for the next one
+        room["turn_index"] %= len(room["order"])
+        room["phase"] = "roll"
+        room["current"] = {}
 
 
 def set_pause(room, paused):
@@ -492,6 +596,8 @@ def public_current(room, content):
     out = {}
     if "dice_value" in cur:
         out["dice_value"] = cur["dice_value"]
+    if "dice_values" in cur:
+        out["dice_values"] = cur["dice_values"]
     for k in ("from", "to", "tile"):
         if k in cur:
             out[k] = cur[k]
@@ -501,6 +607,21 @@ def public_current(room, content):
         out["candidate"] = content.public_entity(cur["category"], cur["candidate_id"])
     if "question" in cur and phase in ("question", "feedback"):
         out["question"] = cur["question"]
+    if phase in ("duel", "duel_result"):
+        for k in ("challenger", "challenger_name", "opponent", "opponent_name"):
+            out[k] = cur.get(k)
+        out["question"] = cur.get("question")
+        out["duel_answers"] = cur.get("duel_answers", {})
+        out["duel_votes_count"] = len(cur.get("duel_votes", {}))
+        if cur.get("deadline"):
+            out["time_left"] = max(0, round(cur["deadline"] - time.time()))
+        if phase == "duel_result":
+            out["duel_winner"] = cur.get("duel_winner")
+            out["duel_winner_name"] = cur.get("duel_winner_name")
+            out["duel_counts"] = cur.get("duel_counts")
+            out["duel_reward"] = cur.get("duel_reward", DUEL_REWARD)
+            out["correct_answer"] = cur.get("correct_answer")
+            out["bible_reference"] = cur.get("bible_reference")
     if phase == "question":
         if cur.get("deadline"):
             out["time_left"] = max(0, round(cur["deadline"] - time.time()))

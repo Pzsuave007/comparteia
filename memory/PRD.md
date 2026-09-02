@@ -85,3 +85,13 @@ secret server-side verification, dramatic winner reveal. Bilingual (ES/EN) PER P
 ## Next Tasks
 - Run live multi-device UI test (host + 2 phones, one ES one EN) end-to-end.
 - Expand question bank via admin as content grows.
+
+## 2026-06 · Fix congelamiento + Reto 1v1
+- FIX: si el jugador en turno se desconecta, `handle_disconnect`/`_advance_player` auto-saltan al
+  siguiente conectado (antes se congelaba). Cubre también: contendiente/único-votante que se va en
+  un duelo (se resuelve), y `remove_player` del jugador en turno (reinicia a 'roll').
+- FEATURE Reto 1v1: al caer en casilla vacía con >=3 jugadores conectados, `_start_duel` enfrenta al
+  jugador en turno con otro al azar; ambos responden (duel_answer) y el resto vota (duel_vote); el
+  ganador +3 honor (DUEL_REWARD); fases 'duel'/'duel_result'. UI: DuelStage (TV), DuelView (teléfono).
+- Verificado por testing_agent (iteration_1: 9/9 core) + pruebas de motor. Cosmético pendiente:
+  el banner de la TV muestra "TURNO DE <retador>" durante duel_result (no bloqueante).

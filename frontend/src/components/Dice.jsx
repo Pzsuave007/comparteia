@@ -19,6 +19,18 @@ function Face({ transform }) {
 }
 
 // value: 1-6 or null. rolling: boolean triggers spin.
+export function DicePair({ values, size = 90, gap }) {
+  const g = gap == null ? Math.round(size * 0.22) : gap;
+  const a = values ? values[0] : null;
+  const b = values ? values[1] : null;
+  return (
+    <div className="flex items-center justify-center" style={{ gap: g }} data-testid="expedition-dice-pair">
+      <Dice value={a} size={size} />
+      <Dice value={b} size={size} />
+    </div>
+  );
+}
+
 export default function Dice({ value, rolling, size = 128 }) {
   const h = size / 2;
   const [rot, setRot] = useState({ x: -20, y: 20, spin: 0 });

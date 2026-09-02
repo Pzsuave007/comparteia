@@ -1,0 +1,36 @@
+{
+  "summary": "E2E verification of the two requested changes on the live preview URL (HTTP + real WebSockets, plus browser UI with 1 TV + 3 phone contexts). Backend: 9/9 core pytest tests pass (REST lifecycle, current-player disconnect auto-advance, mid-game join, full duel flow with +3 honor, no-duel-with-2-players, challenger force-resolve/tie). Frontend: TV /host renders '¡RETO 1 vs 1!' with contenders + question and the winner screen ('gana el reto (+3)'); phones show duel-ans-A..D for contenders and duel-vote-challenger/opponent for voters; turn advances after the duel; closing the current player's tab auto-advances the turn and remaining players keep playing (no freeze). 2 additional edge-case freezes found (2 extra tests intentionally failing).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "WS /api/ws/{code} action 'duel_vote' (game._start_duel/_resolve_duel)", "issue": "If the ONLY eligible voter disconnects during phase 'duel', the room stays in 'duel' forever - handle_disconnect only advances when the disconnected player is the current player, and the vote quorum can never be met. The 30s 'deadline' in current is never enforced server-side. Recoverable only if the challenger manually taps duel-resolve. Suggest: on disconnect, if phase=='duel' and no connected eligible voters remain, call _resolve_duel(); or resolve on deadline expiry."},
+      {"endpoint": "WS host action 'remove' (game.remove_player)", "issue": "Host removing the CURRENT player mid-turn leaves a stale phase (observed 'choose_stop' carried over with the removed player's dice options) instead of resetting to 'roll'. remove_player should call _advance_player()/reset phase+current when the removed pid was the current player."},
+      {"endpoint": "server.py handle_action", "issue": "Dead references: actions 'choose_category' and 'choose_location' call G.choose_category / G.choose_location which do not exist in game.py -> AttributeError inside the WS receive loop (only WebSocketDisconnect is caught), which would drop that player's socket. Remove the branches or add the functions."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "TV /host duel + duel_result", "issues": ["Header still reads 'TURNO DE <challenger>' on the duel_result screen while another player is announced as winner - slightly confusing but not blocking", "Vote counter uses the 🗳️ emoji which renders as a generic box glyph in the preview browser (cosmetic)"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Auto-resolve (or time out) a duel when no connected eligible voters remain, so a voter leaving cannot freeze phase 'duel'",
+    "Reset phase/current in game.remove_player when the host removes the player whose turn it is",
+    "Remove or implement the 'choose_category' / 'choose_location' WS actions (currently AttributeError)"
+  ],
+  "critical_code_review_comments": [
+    "game.handle_disconnect only covers the 'current player left' case; duel/vote quorums and the question 'deadline' have no server-side timeout, so any state whose progress depends on other players can still stall.",
+    "public_state/public_current handled disconnected players without raising in all tested paths (verified via GET /api/rooms/{code} after disconnects).",
+    "Host.jsx (936 lines) and Play.jsx (730 lines) exceed the 700-line guideline; consider splitting stage/view components into separate files."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py"],
+  "success_rate": {"backend": "82% (9/11 - 9 requested-scope tests pass, 2 extra edge-case tests fail)", "frontend": "100% of tested duel/disconnect flows"},
+  "seed_data_creation": "Ephemeral in-memory rooms with players prefixed TEST_ (wiped on backend restart). No DB writes.",
+  "should_call_test_agent_after_fix": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Use /app/backend/tests/backend_test.py: it drives real WS sessions via helpers setup_game(n)/step_towards_empty_tile(). TestRestLifecycle, TestDisconnectDoesNotFreeze and TestDuel all pass. TestEdgeCases has 2 known failures (duel stuck when sole voter disconnects; stale phase after host 'remove' of current player) - re-run TestEdgeCases after the fix. Do NOT restart the backend mid-test (in-memory rooms). Frontend: open /host, click tv-create-btn, read tv-room-code, join players via POST /api/rooms/join, then per player open a new browser context with add_init_script setting localStorage 'archivo_session'.",
+  "rca_of_the_issue": "Duel freeze RCA: game.duel_vote resolves only when len(duel_votes) >= number of connected eligible voters; server.py marks connected=False on WS close but game.handle_disconnect returns early unless the leaver is the current player (the challenger stays current during a duel), so the quorum can never be reached and phase 'duel' persists. Remove-player RCA: game.remove_player only fixes turn_index and never touches room['phase']/room['current'], so the next player inherits the removed player's phase/dice options."
+}

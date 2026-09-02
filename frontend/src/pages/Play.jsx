@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { useT, loc } from "@/i18n";
 import { useRoom, BACKEND } from "@/useRoom";
-import Dice from "@/components/Dice";
+import Dice, { DicePair } from "@/components/Dice";
 import { play } from "@/sounds";
 import { EmojiBar, TimerBar, useCountdown, SparkleBurst } from "@/components/interactions";
 
@@ -187,6 +187,7 @@ function PlayerGame({ session, onLeave }) {
         {winner ? <WinnerPhone state={state} pid={pid} t={t} lang={lang} />
           : tab === "notebook" ? <Notebook state={state} priv={priv} lang={lang} t={t} />
           : state.status === "lobby" ? <LobbyWait session={session} t={t} />
+          : (state.phase === "duel" || state.phase === "duel_result") ? <DuelView state={state} send={send} pid={pid} lang={lang} t={t} />
           : isMyTurn ? <TurnView state={state} priv={priv} send={send} lang={lang} t={t} />
           : <WaitTurn state={state} t={t} send={send} pid={pid} lang={lang} />}
       </div>
@@ -218,6 +219,73 @@ function LobbyWait({ session, t }) {
       <h2 className="font-serif text-3xl text-gold">{session.name}</h2>
       <p className="text-parchment mt-2">{t(session.rank)} · {session.lang === "es" ? "🇪🇸 Español" : "🇺🇸 English"}</p>
       <div className="mt-10 flex items-center gap-2 text-sand/70"><Loader2 className="w-5 h-5 animate-spin" /> {t("waitingHost")}</div>
+    </div>
+  );
+}
+
+function DuelView({ state, send, pid, lang, t }) {
+  const cur = state.current || {};
+  const q = cur.question;
+  const tr = q?.translations?.[lang] || q?.translations?.es;
+  const isContender = pid === cur.challenger || pid === cur.opponent;
+  const [answered, setAnswered] = useState(false);
+  const [voted, setVoted] = useState(null);
+  const lastId = useRef(null);
+  useEffect(() => { if (q?.id !== lastId.current) { lastId.current = q?.id; setAnswered(false); setVoted(null); } }, [q?.id]);
+  const opts = [["A", tr?.answer_a], ["B", tr?.answer_b], ["C", tr?.answer_c], ["D", tr?.answer_d]];
+
+  if (state.phase === "duel_result") {
+    const win = cur.duel_winner_name;
+    return (
+      <div className="p-6 text-center min-h-[60vh] flex flex-col items-center justify-center animate-fade-up">
+        <div className="text-6xl mb-3">⚔️</div>
+        {win
+          ? <><h2 className="font-serif text-3xl text-gold">{t("duelWinner")}</h2><p className="text-parchment text-2xl mt-2">🏆 {win} +{cur.duel_reward || 3}</p></>
+          : <h2 className="font-serif text-2xl text-sand">{t("duelTie")}</h2>}
+        {pid === cur.challenger && <div className="mt-8"><ContinueBtn send={send} t={t} label={t("endTurn")} /></div>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6 animate-fade-up min-h-[60vh]">
+      <div className="text-center mb-4">
+        <div className="text-4xl mb-1">⚔️</div>
+        <h2 className="font-display font-800 text-2xl text-terracotta">{t("duelTitle")}</h2>
+        <p className="text-parchment mt-1">{cur.challenger_name} <span className="text-bronze">{t("duelVs")}</span> {cur.opponent_name}</p>
+      </div>
+      {isContender ? (
+        <>
+          <p className="text-gold text-sm mb-2">{t("youAreDueling")}</p>
+          <h3 className="font-sans font-bold text-lg text-parchment mb-4">{tr?.question}</h3>
+          {answered ? <div className="text-center text-sand/70 py-6">✅ {t("duelAnswered")}</div> : (
+            <div className="grid gap-2">
+              {opts.map(([L, txt]) => (
+                <button key={L} data-testid={`duel-ans-${L}`} onClick={() => { setAnswered(true); send({ action: "duel_answer", answer: L }); }}
+                  className="btn-tactile rounded-xl py-3 px-4 text-left border border-bronze/40 glass text-parchment"><b>{L}.</b> {txt}</button>
+              ))}
+            </div>
+          )}
+          {pid === cur.challenger && (
+            <div className="mt-6 text-center">
+              <button data-testid="duel-resolve" onClick={() => send({ action: "continue" })} className="text-sand/60 text-sm underline">{t("duelResolve")}</button>
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          <p className="text-gold text-center text-sm mb-3">{t("whoWon")}</p>
+          {q && <div className="glass rounded-xl p-3 mb-4 text-sand/80 text-sm">{tr?.question}</div>}
+          {voted ? <div className="text-center text-sand/70 py-6">✅ {t("duelWaitVotes")}</div> : (
+            <div className="grid grid-cols-2 gap-3">
+              {[["challenger", cur.challenger_name, cur.challenger], ["opponent", cur.opponent_name, cur.opponent]].map(([k, name, tid]) => (
+                <button key={k} data-testid={`duel-vote-${k}`} onClick={() => { setVoted(k); send({ action: "duel_vote", target: tid }); }}
+                  className="btn-tactile rounded-2xl py-6 px-3 border-2 border-terracotta/60 bg-terracotta/15 text-parchment font-serif text-lg">{name}</button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -321,7 +389,7 @@ function TurnView({ state, priv, send, lang, t }) {
       <div className="p-6 text-center flex flex-col items-center justify-center min-h-[60vh] animate-fade-up">
         <p className="text-gold font-serif text-2xl mb-2">{t("yourTurn")}</p>
         <p className="text-sand/70 mb-6">{priv?.can_win ? `🏛️ ${t("raceTemple")}` : t("rollToMove")}</p>
-        <div className="mb-10"><Dice value={null} size={110} /></div>
+        <div className="mb-10"><DicePair values={[null, null]} size={78} /></div>
         <button data-testid="roll-dice-btn" onClick={() => send({ action: "roll" })}
           className="btn-tactile bg-gold text-midnight border-[#a9822f] font-black text-2xl rounded-full px-12 py-6 hover:bg-bronze">{t("rollDice")}</button>
       </div>
@@ -332,7 +400,7 @@ function TurnView({ state, priv, send, lang, t }) {
     const situ = ["character", "location", "event", "clue", "trap", "surprise"];
     return (
       <div className="p-6 flex flex-col items-center min-h-[60vh] animate-fade-up">
-        <div className="mb-4"><Dice value={cur.dice_value} size={90} /></div>
+        <div className="mb-4"><DicePair values={cur.dice_values} size={64} /></div>
         <h2 className="font-serif text-2xl text-gold mb-1 text-center">{t("chooseStopTitle")}</h2>
         <p className="text-sand/70 text-sm mb-6 text-center">{t("chooseStopSub")}</p>
         <div className="grid gap-3 w-full max-w-sm">
@@ -357,7 +425,7 @@ function TurnView({ state, priv, send, lang, t }) {
   if (phase === "moving") {
     return (
       <div className="p-6 text-center flex flex-col items-center justify-center min-h-[60vh] animate-fade-up">
-        <div className="mb-6"><Dice value={cur.dice_value} size={120} /></div>
+        <div className="mb-6"><DicePair values={cur.dice_values} size={82} /></div>
         <p className="text-sand/70">{t("youAdvance")}</p>
         <div className="text-6xl my-4">{TILE_EMOJI[cur.tile] || "✨"}</div>
         <p className="font-serif text-2xl text-parchment mb-8">{t("tile_" + cur.tile)}</p>

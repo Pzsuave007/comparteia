@@ -128,6 +128,7 @@ async def ws_endpoint(websocket: WebSocket, code: str):
             still = any(c["pid"] == pid for c in CONNS.get(code, []))
             if not still:
                 room["players"][pid]["connected"] = False
+                G.handle_disconnect(room, pid)
         await broadcast(code)
 
 
@@ -166,16 +167,16 @@ async def handle_action(room, role, pid, msg):
         G.choose_stop(room, CONTENT, pid, msg.get("step"))
     elif action == "continue":
         G.continue_turn(room, CONTENT, pid)
-    elif action == "choose_category":
-        G.choose_category(room, CONTENT, pid, msg.get("category"))
     elif action == "choose_candidate":
         G.choose_candidate(room, CONTENT, pid, msg.get("candidate_id"))
-    elif action == "choose_location":
-        G.choose_location(room, CONTENT, pid, msg.get("location_id"))
     elif action == "answer":
         G.submit_answer(room, CONTENT, pid, msg.get("answer"))
     elif action == "steal":
         G.steal_answer(room, CONTENT, pid, msg.get("answer"))
+    elif action == "duel_answer":
+        G.duel_answer(room, CONTENT, pid, msg.get("answer"))
+    elif action == "duel_vote":
+        G.duel_vote(room, CONTENT, pid, msg.get("target"))
     elif action == "predict":
         G.predict(room, CONTENT, pid, msg.get("value"))
     elif action == "request_help":

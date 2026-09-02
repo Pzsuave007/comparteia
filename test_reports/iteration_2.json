@@ -1,0 +1,39 @@
+{
+  "summary": "Frontend-only E2E test of the two changes: (1) TV must hide correct answer on incorrect/stolen answers, (2) two-dice movement. Drove a full real game via public URL: host created room (tv-create-btn -> tv-room-code), 2 phones joined in separate browser contexts (390x844), game started, ~70 turn steps automated across roll/choose_stop/moving/choose_candidate/question/feedback/clue/rest phases. Verified dice rendering, dice sum movement, incorrect-answer hiding on TV, correct-answer display on TV, phone-side answer visibility, and the stolen-turn TV screen. ALL targeted assertions PASSED.",
+  "backend_issues": {"critical": [], "minor": [
+    {"endpoint": "GET /api/rooms/{code} + WS /api/ws/{code}", "issue": "During feedback phase public_current() still sends correct_answer + bible_reference to ALL clients (incl. TV) even when was_correct=false. UI hides it correctly, but the answer is still visible in the WS/REST payload (devtools). Consider omitting these fields for the public payload when the answer was wrong/stolen."}
+  ]},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_2.json"],
+  "action_items": [
+    "Optional hardening: stop broadcasting correct_answer/bible_reference in public state when the answer was incorrect or stolen (currently only hidden in the UI layer).",
+    "Cleanup: components/Dice.jsx contains dead code - unused `Face` component (declares useState, returns null). Remove it."
+  ],
+  "critical_code_review_comments": [
+    "Host.jsx FeedbackStage correctly branches: correct -> answer box, incorrect -> data-testid='tv-answer-hidden', stolen -> data-testid='tv-answer-hidden-stolen'. No answer/explanation/bible-ref text leaks in the TV DOM (verified by full body text search against the real question data).",
+    "game.py roll_dice(): d1/d2 both 1-6, dice_value = d1+d2, dice_values exposed via public_current; traversal uses the sum so pawn advance == sum (verified from=0 -> to=8 for [2,6])."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only request; supporting REST used for verification, all 200s)", "frontend": "100% of requested assertions passed"},
+  "verified_assertions": {
+    "two_dice_on_phone_before_roll": "PASS - expedition-dice-pair contains exactly 2 expedition-die elements",
+    "two_dice_on_phone_after_roll_and_moving_choose_stop": "PASS - screenshot shows dice 5 and 3 matching dice_values=[5,3]",
+    "two_dice_on_TV_during_moving_and_choose_stop": "PASS - 1 pair / 2 dice",
+    "dice_sum_movement": "PASS - dice_values=[2,6], dice_value=8, from 0 -> to 8; 12 rolls sampled, all sum==dice_value and 2<=sum<=12",
+    "incorrect_answer_TV_hides": "PASS - tv-answer-hidden present, zero leaks of answer text/explanation/bible reference",
+    "incorrect_answer_phone_shows": "PASS - FeedbackView shows 'RESPUESTA CORRECTA B. Josue', explanation and 'Josue 1:1'",
+    "correct_answer_TV_shows": "PASS (6 occurrences) - answer text + explanation + bible reference rendered, tv-answer-hidden absent",
+    "stolen_turn_TV_hides": "PASS - spectator stole a verify question in the 5s steal window; TV showed ROBO! + tv-answer-hidden-stolen with no answer leak",
+    "regression_full_flow": "PASS - roll -> choose_stop -> moving -> tile (character/location/trap/clue/rest) -> choose_candidate -> question -> feedback -> end turn cycled repeatedly for 2 players with no console errors or stuck phases"
+  },
+  "seed_data_creation": "Transient in-memory rooms 6059 and 6204 with players QAUNO/QADOS and STEALA/STEALB (in-memory only, no DB writes).",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "None required - rooms created dynamically",
+  "context_for_next_testing_agent": "Reusable pattern: GET /api/admin/questions gives correct_answer per question id, and GET /api/rooms/{code} gives full public state (phase, current, dice_values, question id) - use these to drive/verify the game deterministically while acting through the UI. Steal window opens only in the last 5s of the 30s question timer and only for verify-purpose questions (character/location/event tiles).",
+  "rca_of_the_issue": "N/A - no defects found in the two implemented changes."
+}

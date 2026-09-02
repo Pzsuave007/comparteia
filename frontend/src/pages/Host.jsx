@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { tt, loc } from "@/i18n";
 import { useRoom, BACKEND } from "@/useRoom";
-import Dice from "@/components/Dice";
+import Dice, { DicePair } from "@/components/Dice";
 import { play } from "@/sounds";
 import { QRCodeSVG } from "qrcode.react";
 import { ReactionOverlay, TimerBar, useCountdown, ArchiveVault, SparkleBurst } from "@/components/interactions";
@@ -488,7 +488,7 @@ function GameStage({ state, hostLang, vaultPulse, shownProgress }) {
   if (phase === "moving") {
     hud = (
       <BottomHud>
-        <Dice value={cur.dice_value} size={92} />
+        <DicePair values={cur.dice_values} size={58} />
         <div className="text-center">
           <div className="text-4xl">{TILE_EMOJI[cur.tile] || "✨"}</div>
           <div className="font-display font-800 text-2xl lg:text-3xl text-parchment mt-1">{bi(hostLang, "AVANZA…", "MOVING…")}</div>
@@ -498,7 +498,7 @@ function GameStage({ state, hostLang, vaultPulse, shownProgress }) {
   } else if (phase === "choose_stop") {
     hud = (
       <BottomHud>
-        <Dice value={cur.dice_value} size={88} />
+        <DicePair values={cur.dice_values} size={54} />
         <div>
           <h2 className="font-serif text-3xl text-gold">{bi(hostLang, "¿Dónde te detienes?", "Where do you stop?")}</h2>
           <p className="text-sand/70 text-base">{bi(hostLang, `${player?.name} decide su ruta…`, `${player?.name} is deciding their route…`)}</p>
@@ -519,8 +519,8 @@ function GameStage({ state, hostLang, vaultPulse, shownProgress }) {
   } else if (phase === "roll") {
     hud = (
       <BottomHud>
-        <Dice value={null} size={88} />
-        <h2 className="font-serif text-2xl lg:text-3xl text-parchment">{bi(hostLang, "Lanza el dado en tu teléfono", "Roll the die on your phone")}</h2>
+        <DicePair values={[null, null]} size={54} />
+        <h2 className="font-serif text-2xl lg:text-3xl text-parchment">{bi(hostLang, "Lanza los dados en tu teléfono", "Roll the dice on your phone")}</h2>
       </BottomHud>
     );
   } else if (phase === "clue_tile") {
@@ -567,9 +567,11 @@ function GameStage({ state, hostLang, vaultPulse, shownProgress }) {
     body = <FeedbackStage cur={cur} state={state} hostLang={hostLang} pLang={pLang} />;
   } else if (phase === "setback") {
     body = <SetbackStage cur={cur} hostLang={hostLang} />;
+  } else if (phase === "duel" || phase === "duel_result") {
+    body = <DuelStage cur={cur} hostLang={hostLang} pLang={pLang} />;
   }
 
-  const focus = ["choose_candidate", "question", "feedback"].includes(phase);
+  const focus = ["choose_candidate", "question", "feedback", "duel", "duel_result"].includes(phase);
 
   return (
     <div className="relative min-h-screen overflow-hidden">
@@ -583,6 +585,40 @@ function GameStage({ state, hostLang, vaultPulse, shownProgress }) {
       {phase === "feedback" && cur.was_correct && <SparkleBurst key={cur.question?.id} />}
       {body && <div className="relative z-20">{body}</div>}
       {hud}
+    </div>
+  );
+}
+
+function DuelStage({ cur, hostLang, pLang }) {
+  const q = cur.question;
+  const tr = q?.translations?.[pLang] || q?.translations?.es;
+  if (cur.duel_winner_name !== undefined || cur.duel_counts) {
+    const c = cur.duel_counts || {};
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-10 text-center animate-scale-in">
+        <div className="text-8xl mb-4">⚔️</div>
+        {cur.duel_winner_name ? (
+          <>
+            <div className="font-display font-800 text-5xl text-gold mb-2">🏆 {cur.duel_winner_name}</div>
+            <p className="font-serif text-3xl text-parchment">{bi(hostLang, `gana el reto (+${cur.duel_reward || 3})`, `wins the duel (+${cur.duel_reward || 3})`)}</p>
+          </>
+        ) : (
+          <div className="font-display font-800 text-5xl text-sand">{bi(hostLang, "¡EMPATE!", "TIE!")}</div>
+        )}
+        <p className="text-sand/70 text-2xl mt-6">{cur.challenger_name} {c.challenger} · {c.opponent} {cur.opponent_name}</p>
+      </div>
+    );
+  }
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center px-10 text-center">
+      <div className="text-7xl mb-3 animate-float">⚔️</div>
+      <div className="font-display font-800 text-5xl lg:text-6xl text-terracotta mb-3">{bi(hostLang, "¡RETO 1 vs 1!", "1v1 DUEL!")}</div>
+      <p className="font-serif text-4xl text-parchment mb-8">{cur.challenger_name} <span className="text-bronze">vs</span> {cur.opponent_name}</p>
+      <div className="rounded-3xl p-8 border-2 border-bronze/50 bg-[#161f30] shadow-xl max-w-3xl">
+        <p className="text-2xl text-parchment font-semibold mb-4">{tr?.question}</p>
+        <p className="text-sand/70 text-xl">{bi(hostLang, "Los retados responden · los demás votan quién ganó en su teléfono", "Contenders answer · everyone else votes on their phone")}</p>
+        <p className="text-gold text-lg mt-4">🗳️ {cur.duel_votes_count || 0}</p>
+      </div>
     </div>
   );
 }
@@ -705,10 +741,9 @@ function FeedbackStage({ cur, state, hostLang, pLang }) {
         <div className="text-8xl mb-4">🕵️</div>
         <div className="font-display font-800 text-6xl lg:text-7xl text-terracotta mb-4">{bi(hostLang, "¡ROBO!", "STOLEN!")}</div>
         <p className="font-serif text-4xl text-parchment">{cur.stolen_by_name} {bi(hostLang, `robó el turno (+${cur.steal_reward || 3})`, `stole the turn (+${cur.steal_reward || 3})`)}</p>
-        <div className="rounded-3xl p-8 border-2 border-bronze/50 bg-[#161f30] shadow-xl max-w-3xl mt-8">
-          <p className="text-2xl text-parchment font-bold mb-2">{cur.correct_answer}. {primary?.["answer_" + cur.correct_answer.toLowerCase()]}</p>
-          <p className="text-xl text-sand/90 mb-3">{primary?.explanation}</p>
-          <p className="text-gold text-lg font-semibold">📖 {cur.bible_reference}</p>
+        <div className="rounded-3xl p-8 border-2 border-bronze/40 bg-[#161f30] shadow-xl max-w-3xl mt-8" data-testid="tv-answer-hidden-stolen">
+          <div className="text-5xl mb-3">🔐</div>
+          <p className="text-2xl text-parchment font-bold">{bi(hostLang, "La respuesta se ha enviado en privado al investigador", "The answer was sent privately to the investigator")}</p>
         </div>
       </div>
     );
@@ -718,11 +753,18 @@ function FeedbackStage({ cur, state, hostLang, pLang }) {
       <div className="font-display font-800 text-7xl lg:text-8xl mb-6" style={{ color: correct ? "#348C52" : "#B94034" }}>
         {bi(hostLang, correct ? "✅ ¡CORRECTO!" : "❌ CASI…", correct ? "CORRECT!" : "ALMOST…")}
       </div>
-      <div className="rounded-3xl p-8 border-2 border-bronze/50 bg-[#161f30] shadow-xl max-w-3xl">
-        <p className="text-2xl text-parchment font-bold mb-2">{cur.correct_answer}. {primary?.["answer_" + cur.correct_answer.toLowerCase()]}</p>
-        <p className="text-xl text-sand/90 mb-3">{primary?.explanation}</p>
-        <p className="text-gold text-lg font-semibold">📖 {cur.bible_reference}</p>
-      </div>
+      {correct ? (
+        <div className="rounded-3xl p-8 border-2 border-bronze/50 bg-[#161f30] shadow-xl max-w-3xl">
+          <p className="text-2xl text-parchment font-bold mb-2">{cur.correct_answer}. {primary?.["answer_" + cur.correct_answer.toLowerCase()]}</p>
+          <p className="text-xl text-sand/90 mb-3">{primary?.explanation}</p>
+          <p className="text-gold text-lg font-semibold">📖 {cur.bible_reference}</p>
+        </div>
+      ) : (
+        <div className="rounded-3xl p-8 border-2 border-bronze/40 bg-[#161f30] shadow-xl max-w-3xl" data-testid="tv-answer-hidden">
+          <div className="text-5xl mb-3">🔐</div>
+          <p className="text-2xl text-parchment font-bold">{bi(hostLang, "La respuesta se ha enviado en privado al investigador", "The answer was sent privately to the investigator")}</p>
+        </div>
+      )}
       {correct && isVerify && (
         <div className="mt-8 animate-fade-up">
           <p className="font-serif text-3xl text-bronze animate-pulse">🔎 {bi(hostLang, "Verificando archivo…", "Verifying archive…")}</p>
