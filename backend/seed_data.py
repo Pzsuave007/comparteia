@@ -3,7 +3,7 @@ Entities (characters, locations, events), questions and per-entity clues.
 All content is bilingual (es/en) and expandable via the admin panel.
 """
 
-IMG = "https://static.prod-images.emergentagent.com/jobs/853e5b4e-0492-4560-99fd-a438ec12e4f4/images/{}.jpeg"
+IMG = "/assets/entities/{}.jpg"
 
 
 def _img(h):

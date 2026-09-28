@@ -16,9 +16,9 @@ import { avatarSrc } from "@/avatars";
 
 const API = `${BACKEND}/api`;
 const RUINS = "https://images.unsplash.com/photo-1565799446045-5ba401561908";
-const MAP = "https://static.prod-images.emergentagent.com/jobs/853e5b4e-0492-4560-99fd-a438ec12e4f4/images/9ffe6bbca9e10bec58c35c9519ea95ed9dd16362c8c5752053741024761ea98f.jpeg";
-const EXPLORER_TOKEN = "https://static.prod-images.emergentagent.com/jobs/853e5b4e-0492-4560-99fd-a438ec12e4f4/images/55b0238dc666b9d6289ee02bcf67ca08fe88d4974a83be411c3bfe69f6dae570.jpeg";
-const TEMPLE_TOKEN = "https://static.prod-images.emergentagent.com/jobs/853e5b4e-0492-4560-99fd-a438ec12e4f4/images/cc53fcd9f4291a5b4d3bc2a99abd1a05ae02a94fe1c3750044309fcd08068db7.jpeg";
+const MAP = "/assets/map.jpg";
+const EXPLORER_TOKEN = "/assets/explorer.jpg";
+const TEMPLE_TOKEN = "/assets/temple.jpg";
 const TEMPLE = TEMPLE_TOKEN;
 
 const PLAYER_COLORS = ["#E5C05C", "#C05B3F", "#2E6F40", "#5B8FB9", "#B98BC9", "#D98E3A", "#4FB3A5", "#D46A9F"];

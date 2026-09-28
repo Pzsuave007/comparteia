@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 
-// In the Emergent preview REACT_APP_BACKEND_URL is set. For a single-port
+// When REACT_APP_BACKEND_URL is set the app uses it. For a single-port
 // self-hosted build leave it empty and the app talks to its own origin.
 const BACKEND = process.env.REACT_APP_BACKEND_URL || (typeof window !== "undefined" ? window.location.origin : "");
 

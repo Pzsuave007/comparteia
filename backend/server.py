@@ -513,7 +513,7 @@ app.add_middleware(
 
 # --------------------------------------------------------------------------
 # Serve the built React frontend (single-port self-hosting).
-# Only active when a build exists; the Emergent preview (no build dir) is
+# Only active when a build exists; in local dev (no build dir) this is
 # unaffected because the frontend runs separately there.
 # --------------------------------------------------------------------------
 FRONTEND_BUILD = os.environ.get("FRONTEND_BUILD_DIR", str(ROOT_DIR.parent / "frontend" / "build"))
